@@ -165,7 +165,7 @@ public:
         lock_guard<mutex> lock(m_mutex);
         os << '[';
         bool first = true;
-        ::ApplyFunction(begin(), end(), [&os, &first](const Node &node) {
+        ::ApplyFunction(*this, [&os, &first](const Node &node) {
           if (!first)
             os << ',';
           os << node;
@@ -187,9 +187,7 @@ public:
     void ApplyFunction(Func func, Args... args) {
         lock_guard<mutex> lock(m_mutex);
         // TODO: retutilizar la funcion ApplyFunction generica de foreach.h
-        for (size_t i = 0; i < size(); ++i) {
-            func(m_data[i], args...);
-        }
+        ::ApplyFunction(*this, func, forward<Args>(args)...);
     }
 };
 
