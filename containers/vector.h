@@ -1,6 +1,7 @@
 #ifndef __VECTOR_H__
 #define __VECTOR_H__
 #include <mutex>
+#include "../foreach.h"
 #include <initializer_list>
 #include "GeneralIterator.h"
 #include "../types.h" // Ref
@@ -162,12 +163,16 @@ public:
     ostream &write(ostream &os){
         // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
         lock_guard<mutex> lock(m_mutex);
-        os << "[";
-        for (size_t i = 0; i < size()-1; ++i)
-            os << m_data[i] << ",";
-        if (size() > 0)
-            os << m_data[size()-1];
-        return os << "]";
+        os << '[';
+        bool first = true;
+        ::ApplyFunction(begin(), end(), [&os, &first](const Node &node) {
+          if (!first)
+            os << ',';
+          os << node;
+          first = false;
+        });
+        os << ']';
+        return os;
     }
 
     // TODO: implementar la lectura de un vector desde un stream
