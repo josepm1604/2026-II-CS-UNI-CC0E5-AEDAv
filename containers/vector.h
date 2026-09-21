@@ -110,9 +110,12 @@ public:
 
     // Move assignment operator
     Vector& operator=(Vector&& other) noexcept {
-        m_data     = std::exchange(other.m_data, nullptr);
-        m_size     = std::exchange(other.m_size, 0);
-        m_capacity = std::exchange(other.m_capacity, 0);
+        if(this != &other) {
+            clear();
+            m_data     = std::exchange(other.m_data, nullptr);
+            m_size     = std::exchange(other.m_size, 0);
+            m_capacity = std::exchange(other.m_capacity, 0);
+        }
         return *this;
     }
 
@@ -178,6 +181,63 @@ public:
     // TODO: implementar la lectura de un vector desde un stream
     istream &read(istream &is){
         // Implementation for reading vector from stream
+        Vector temp;
+        char ch;
+
+        is >> ch;
+        if(!is || ch != '[') { 
+          is.setstate(ios::failbit); 
+          return is; 
+        }
+
+        is >> ws; 
+        bool first = true;
+        while(is.peek() != ']') {
+            if(!first) {
+              is >> ch;
+              if(!is || ch != ',') { is.setstate(ios::failbit); return is; }
+            }
+
+            is >> ch;
+            if(!is || ch != '(') { is.setstate(ios::failbit); return is; }
+
+            value_type value;
+            Ref ref;
+
+            if constexpr(is_same_v<value_type, string>) {
+                getline(is, value, ',');
+                if(!is) {return is;}
+            } else {
+                is >> value;
+                if(!is) {return is;}
+                is >> ch;
+                if(!is || ch != ',') { is.setstate(ios::failbit); return is; }
+            }
+
+            is >> ref;
+            if(!is) {return is;}
+            is >> ch;
+            if(!is || ch != ')') { is.setstate(ios::failbit); return is; }
+
+            temp.push_back(value, ref);
+            first = false;
+            is >> ws;
+
+            if(is.eof()) { is.setstate(ios::failbit); return is; }
+        }
+
+        if(is.eof()) { is.setstate(ios::failbit); return is; }
+        is.get();
+
+        lock_guard<mutex> lock(m_mutex);
+        delete [] m_data;
+        m_data = temp.m_data;
+        m_size = temp.m_size;
+        m_capacity = temp.m_capacity;
+        temp.m_data = nullptr;
+        temp.m_size = 0;
+        temp.m_capacity = 0;
+        return is;
     }
     // Aplicarle una funcion a cada elemento.
     //       ej. sumarle un valor x
