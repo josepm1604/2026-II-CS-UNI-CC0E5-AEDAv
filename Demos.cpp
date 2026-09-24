@@ -77,20 +77,23 @@ void TestTraversal(Container &container) {
 }
 
 void DemoVector() {
-    // Dejamos los archivos vacios para que TestContainer acumule (append)
-    // el estado del container tras cada paso
-    ofstream("vector.txt", ios::trunc).close();
-
-    // Cada elemento es una pareja (valor, ref) que se guarda en un Node;
-    // el constructor initializer_list arma el Vector inicial de una vez
     Vector<VectorAscTraits<TX>> vec({{0, 10}, {1, 11}, {2, 12}, {3, 13}, {4, 14}});
-    TestContainer(vec, {{5, 15}, {6, 16}, {7, 17}, {8, 18}, {9, 19}}, "vector.txt");
-    TestTraversal(vec);
+    cout << "Vector base: " << vec << endl;
+    cout << "Ingrese un vector (ejemplo: [(5,15),(6,16)]): ";
+    if (cin >> vec)
+        cout << "Vector ingresado: " << vec << endl;
+    else
+        cout << "Entrada invalida. Se conserva el vector base: " << vec << endl;
 
-    ofstream("vector_str.txt", ios::trunc).close();
-    Vector<VectorAscTraits<string>> strVec;
-    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
-    TestTraversal(strVec);
+    {
+        ofstream output("vector.txt", ios::trunc);
+        output << vec;
+    }
+
+    Vector<VectorAscTraits<TX>> fromFile;
+    ifstream input("vector.txt");
+    fromFile.read(input);
+    cout << "Vector leido de vector.txt: " << fromFile << endl;
 }
 
 // Insertamos muchos elementos (generados en un loop, no a mano)
