@@ -62,9 +62,9 @@ private:
 public:
     LinkedList() {}
     // TODO: implementar LinkedList con nodos enlazados y métodos push_back.
-    LinkedList(const LinkedList&)            = delete; // no se permite copia
+    LinkedList(const LinkedList&); // no se permite copia
     // TODO: implementar LinkedList con nodos enlazados y métodos push_back.
-    LinkedList& operator=(const LinkedList&) = delete; // no se permite asignacion
+    LinkedList& operator=(const LinkedList&); // no se permite asignacion
 
     // TODO: implementar la destruccion en un metodo clear()
     void clear();
@@ -171,25 +171,6 @@ public:
             return ::call(begin(), end(), func, std::forward<Args>(args)...);
     }
 
-    template <typename Func, typename... Args>
-    decltype(auto) rcall(Func&& func, Args&&... args) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        // Guardar punteros para recorrer la lista simple en sentido inverso.
-        std::vector<NodePtr> nodes;
-        for (NodePtr current = m_pRoot; current != nullptr; current = current->next()) {
-            nodes.push_back(current);
-        }
-        
-        auto invokeNode = [&func](NodePtr node, auto&&... forwarded) -> decltype(auto) {
-            return func(*node, std::forward<decltype(forwarded)>(forwarded)...);
-        };
-
-        if constexpr (std::is_void_v<std::invoke_result_t<Func, Node&, Args...>>)
-            ::call(nodes.rbegin(), nodes.rend(), invokeNode, std::forward<Args>(args)...);
-        else
-            return *::call(nodes.rbegin(), nodes.rend(), invokeNode, std::forward<Args>(args)...);
-        
-    }
 };
 
 
@@ -200,6 +181,38 @@ public:
 //     return *this;
 // }
 //
+
+// copy assignment 
+template <typename Traits>
+LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other) {
+    if(this==&other) {
+        return *this;
+    }
+
+    std::scoped_lock lock(m_mutex, other.m_mutex); // Bloquea ambos mutexes para evitar deadlocks
+    LinkedList<Traits> tempList; // Lista temporal para construir la copia
+    for (NodePtr current = other.m_pRoot;
+         current != nullptr;
+         current = current->next()) {
+        tempList.push_back(current->getValue(), current->getRef());
+    }
+
+    std::swap(m_pRoot, tempList.m_pRoot);
+    std::swap(m_pTail, tempList.m_pTail);
+    return *this;
+}
+
+template <typename Traits>
+LinkedList<Traits>::LinkedList(const LinkedList<Traits>& other) {
+    // pasar cada elemento de other a this, usando push_back
+    // std::scoped_lock lock(m_mutex, other.m_mutex); // Bloquea ambos mutexes para evitar deadlocks
+    for (NodePtr current = other.m_pRoot; 
+         current != nullptr; 
+         current = current->next()) {
+        push_back(current->getValue(), current->getRef());
+    }
+}
+
 
 // push_back 
 template <typename Traits>
@@ -253,3 +266,4 @@ void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePt
     internalInsert(value, ref, rParent->m_pNext);
 }
 #endif // __LINKEDLIST_H__
+// Extender LinkedList, hacer todos los TODOS para hacer merge

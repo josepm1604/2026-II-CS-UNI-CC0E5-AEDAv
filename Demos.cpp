@@ -163,39 +163,44 @@ void DemoLinkedList()
 
     cout << "\n--- Demo LinkedList ---" << endl;
 
-    // Lista vacia e insercion al final: conserva el orden de llegada.
     List list;
     cout << "Lista vacia: " << list << endl;
     list.push_back(10, 1);
     list.push_back(30, 3);
     cout << "push_back: " << list << endl;
 
-    // insert mantiene el orden si la lista ya esta ordenada.
-    list.insert(5, 0);   // Al principio.
-    list.insert(20, 2);  // En el medio.
-    list.insert(40, 4);  // Al final.
-    list.push_back(50, 5); // Comprueba que la cola se actualizo.
+    List lista_copia = list;
+    cout << "Lista copia: " << lista_copia << endl;
+
+    List lista_copia2(list);
+    cout << "Lista copia2: " << lista_copia2 << endl;
+
+    list.insert(5, 0);   
+    list.insert(40, 4);  
+    list.insert(20, 2);  
+    list.push_back(50, 5); 
     cout << "Despues de insert y push_back: " << list << endl;
 
-    // Recorrido manual con begin(), end(), * y ++.
+    // Recorrido con iteradores 
     cout << "Con iteradores: ";
     for (auto it = list.begin(); it != list.end(); ++it)
         cout << *it << " ";
     cout << endl;
 
+    // Demo bucle nativo
+    cout << "Bucle nativo: ";
+    for (const auto &node : list)
+        cout << node << " ";
+    cout << endl;
+
     cout << "call (hacia adelante): ";
     list.call(PrintNode<Node>, cout);
-    cout << "\nrcall (hacia atras): ";
-    list.rcall(PrintNode<Node>, cout);
-    cout << endl;
 
     // Modificar valores y buscar el primero que cumple una condicion.
     list.ApplyFunction(AddX<TX>, 1);
     cout << "Sumar 1 a cada valor: " << list << endl;
     Node &found = list.FirstThat(IsGreaterThan<Node, TX>, 20);
     cout << "Primer valor mayor que 20: " << found << endl;
-    Node &last = list.rcall(IsGreaterThan<Node, TX>, 20);
-    cout << "Desde el final, primer valor mayor que 20: " << last << endl;
 
     try {
         list.FirstThat(IsGreaterThan<Node, TX>, 100);
@@ -203,14 +208,14 @@ void DemoLinkedList()
         cout << "Busqueda sin coincidencias: " << error.what() << endl;
     }
 
-    // Guardar en un archivo y recuperar los mismos nodos.
+    // Guardar en un archivo
     {
         ofstream output("linkedlist.txt");
         if (!output || !list.write(output)) {
             cerr << "No se pudo guardar linkedlist.txt" << endl;
             return;
         }
-    } // Cierra el archivo antes de leerlo.
+    } 
 
     List recovered;
     ifstream input("linkedlist.txt");
@@ -244,5 +249,4 @@ void DemoLinkedList()
     istringstream text("[(Hola mundo,3),(Lista enlazada,4)]");
     words.read(text);
     cout << "Strings leidos con espacios: " << words << endl;
-    // Al terminar, los destructores liberan los nodos de cada lista.
 }
