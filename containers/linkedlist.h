@@ -15,7 +15,6 @@ class LinkedListNode : public GeneralNode<T> {
   
     template <typename Traits>
     friend class LinkedList;
-    // La lista necesita modificar m_pNext, por eso es friend de LinkedList
 
     Node *m_pNext = nullptr; // puntero al siguiente nodo
 public:
@@ -61,10 +60,8 @@ private:
     NodePtr NodePtrGetRoot() const { return m_pRoot; } // Falta el tipo de retorno
 public:
     LinkedList() {}
-    // TODO: implementar LinkedList con nodos enlazados y métodos push_back.
-    LinkedList(const LinkedList&); // no se permite copia
-    // TODO: implementar LinkedList con nodos enlazados y métodos push_back.
-    LinkedList& operator=(const LinkedList&); // no se permite asignacion
+    LinkedList(const LinkedList&);
+    LinkedList& operator=(const LinkedList&);
 
     // TODO: implementar la destruccion en un metodo clear()
     void clear();
@@ -86,6 +83,7 @@ public:
     // TODO: persistencia: write() y read() para LinkedList
     std::ostream &write(std::ostream &os) { return os << *this; }
     std::istream &read(std::istream &is)  { return is >> *this; }
+
     friend std::ostream &operator <<(std::ostream &os, const LinkedList<Traits> &list) {
         std::lock_guard<std::mutex> lock(list.m_mutex); 
         NodePtr current = list.m_pRoot;
@@ -98,50 +96,29 @@ public:
         }
         return os << "]";
     }
-    // TODO: implementar
+
     friend std::istream &operator >>(std::istream &is, LinkedList<Traits> &list) {
         std::lock_guard<std::mutex> lock(list.m_mutex);
-        LinkedList<Traits> tempList;    
-        // Usar un temporal por si hay error de lectura, no modificar la lista original
+        LinkedList<Traits> tempList;
+        char separator;
         auto fail = [&]() -> std::istream& { is.setstate(std::ios::failbit); return is; };
 
-        auto expect = [&](char expected ) -> bool { 
-            char actual; 
-            return static_cast<bool>(is >> actual) && actual == expected; 
-        };
-
-        if (!expect('[')) return fail();
-        
-        is >> ws; 
-        if(is.peek() == ']') {
-            is.get(); // consume ']'
-            if(!is) return fail();
+        if (!(is >> separator) || separator != '[') return fail();
+        is >> std::ws;
+        if (is.peek() == ']') {
+            is.get();
         } else {
-            while (true) {
-              if(!expect('(')) return fail();
-              value_type value{};
-              Ref ref{};
-              
-              if constexpr (std::is_same_v<typename Traits::value_type,std::string>) {
-                  if(!std::getline(is, value, ',')) return fail(); // Leer el valor hasta la coma
-              } else {
-                  if(!(is >> value) || !expect(',')) return fail(); // Leer el valor y la coma
-              }
-
-              if(!(is>>ref) || !expect(')')) return fail(); // Leer la referencia y el cierre de paréntesis
-              
-              tempList.push_back(value, ref);
-              char separator;
-              
-              if(!(is >> separator)) return fail(); // Leer el separador
-              if(separator == ']') break; // Fin de la lista
-              if(separator != ',') return fail(); // Si no es coma ni cierre de lista,
-            }
+            do {
+                GeneralNode<value_type> node;
+                if (!(is >> node)) return fail();
+                tempList.push_back(node.getValue(), node.getRef());
+                if (!(is >> separator) || (separator != ',' && separator != ']')) return fail();
+            } while (separator == ',');
         }
 
+        if (!is) return fail();
         std::swap(list.m_pRoot, tempList.m_pRoot);
         std::swap(list.m_pTail, tempList.m_pTail);
-        
         return is;
     }
     // Iterators
@@ -174,28 +151,12 @@ public:
 };
 
 
-// No debe de tener implementacion, ya que no se permite copia ni asignacion
-// template <typename Traits>
-// LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>&){ // no se permite asignacion
-//
-//     return *this;
-// }
-//
-
-// copy assignment 
 template <typename Traits>
 LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& other) {
-    if(this==&other) {
-        return *this;
-    }
+    if (this == &other) return *this;
 
-    std::scoped_lock lock(m_mutex, other.m_mutex); // Bloquea ambos mutexes para evitar deadlocks
-    LinkedList<Traits> tempList; // Lista temporal para construir la copia
-    for (NodePtr current = other.m_pRoot;
-         current != nullptr;
-         current = current->next()) {
-        tempList.push_back(current->getValue(), current->getRef());
-    }
+    LinkedList<Traits> tempList(other);
+    std::lock_guard<std::mutex> lock(m_mutex);
 
     std::swap(m_pRoot, tempList.m_pRoot);
     std::swap(m_pTail, tempList.m_pTail);
@@ -203,12 +164,9 @@ LinkedList<Traits>& LinkedList<Traits>::operator=(const LinkedList<Traits>& othe
 }
 
 template <typename Traits>
-LinkedList<Traits>::LinkedList(const LinkedList<Traits>& other) {
-    // pasar cada elemento de other a this, usando push_back
-    // std::scoped_lock lock(m_mutex, other.m_mutex); // Bloquea ambos mutexes para evitar deadlocks
-    for (NodePtr current = other.m_pRoot; 
-         current != nullptr; 
-         current = current->next()) {
+LinkedList<Traits>::LinkedList(const LinkedList<Traits>& other) : LinkedList() {
+    std::lock_guard<std::mutex> lock(other.m_mutex);
+    for (NodePtr current = other.m_pRoot; current != nullptr; current = current->next()) {
         push_back(current->getValue(), current->getRef());
     }
 }
@@ -223,10 +181,10 @@ void LinkedList<Traits>::push_back(const value_type& value, Ref ref){
     if (m_pTail != nullptr) {
         m_pTail->m_pNext = newNode;
     } else {
-        m_pRoot = newNode; // Si la lista estaba vacía, el nuevo nodo es la raíz
+        m_pRoot = newNode; 
     }
 
-    m_pTail = newNode; // Actualizamos el puntero al último nodo
+    m_pTail = newNode;
 }
 
 
@@ -267,3 +225,4 @@ void LinkedList<Traits>::internalInsert(const value_type& value, Ref ref, NodePt
 }
 #endif // __LINKEDLIST_H__
 // Extender LinkedList, hacer todos los TODOS para hacer merge
+// Eso es necesario para el sabado
