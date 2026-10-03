@@ -2,10 +2,12 @@
 #include <iostream>
 #include <fstream> // ofstream para escribir en archivo
 #include <string>
+#include <sstream>
 #include <thread>
 #include <vector>
 #include "foreach.h"
 #include "containers/vector.h"
+#include "containers/linkedlist.h"
 #include "Demos.h"
 using namespace std;
 
@@ -154,8 +156,97 @@ void DemoRaceCondition() {
              << "sincroniza correctamente las inserciones concurrentes" << endl;
 }
 
-// TODO: Implementar DemoLinkedList() para probar la lista enlazada y sus iteradores.
 void DemoLinkedList()
 {
-    // Implementation for LinkedList demo
+    using List = LinkedList<LinkedListAscTraits<TX>>;
+    using Node = List::Node;
+
+    cout << "\n--- Demo LinkedList ---" << endl;
+
+    List list;
+    cout << "Lista vacia: " << list << endl;
+    list.push_back(10, 1);
+    list.push_back(30, 3);
+    cout << "push_back: " << list << endl;
+
+    List lista_copia = list;
+    cout << "Lista copia: " << lista_copia << endl;
+
+    List lista_copia2(list);
+    cout << "Lista copia2: " << lista_copia2 << endl;
+
+    list.insert(5, 0);   
+    list.insert(40, 4);  
+    list.insert(20, 2);  
+    list.push_back(50, 5); 
+    cout << "Despues de insert y push_back: " << list << endl;
+
+    // Recorrido con iteradores 
+    cout << "Con iteradores: ";
+    for (auto it = list.begin(); it != list.end(); ++it)
+        cout << *it << " ";
+    cout << endl;
+
+    // Demo bucle nativo
+    cout << "Bucle nativo: ";
+    for (const auto &node : list)
+        cout << node << " ";
+    cout << endl;
+
+    cout << "call (hacia adelante): ";
+    list.call(PrintNode<Node>, cout);
+
+    // Modificar valores y buscar el primero que cumple una condicion.
+    list.ApplyFunction(AddX<TX>, 1);
+    cout << "Sumar 1 a cada valor: " << list << endl;
+    Node &found = list.FirstThat(IsGreaterThan<Node, TX>, 20);
+    cout << "Primer valor mayor que 20: " << found << endl;
+
+    try {
+        list.FirstThat(IsGreaterThan<Node, TX>, 100);
+    } catch (const runtime_error &error) {
+        cout << "Busqueda sin coincidencias: " << error.what() << endl;
+    }
+
+    // Guardar en un archivo
+    {
+        ofstream output("linkedlist.txt");
+        if (!output || !list.write(output)) {
+            cerr << "No se pudo guardar linkedlist.txt" << endl;
+            return;
+        }
+    } 
+
+    List recovered;
+    ifstream input("linkedlist.txt");
+    if (!input || !recovered.read(input)) {
+        cerr << "No se pudo leer linkedlist.txt" << endl;
+        return;
+    }
+    cout << "Lista recuperada del archivo: " << recovered << endl;
+
+    // operator>> reemplaza el contenido; una entrada invalida lo conserva.
+    istringstream valid("[(7,70),(8,80)]");
+    valid >> recovered;
+    cout << "Lectura con operator>>: " << recovered << endl;
+    istringstream invalid("[(9,90)"); // Falta el cierre de la lista.
+    invalid >> recovered;
+    if (invalid.fail())
+        cout << "Entrada invalida, lista conservada: " << recovered << endl;
+
+    // clear libera los nodos y permite reutilizar la lista.
+    list.clear();
+    cout << "Despues de clear: " << list << endl;
+    cout << "begin() == end(): " << (list.begin() == list.end()) << endl;
+    list.push_back(99, 9);
+    cout << "Lista reutilizada: " << list << endl;
+
+    // La misma estructura tambien admite strings.
+    LinkedList<LinkedListAscTraits<string>> words;
+    words.push_back("Hola", 1);
+    words.push_back("Mundo", 2);
+    cout << "Lista de strings: " << words << endl;
+    istringstream text("[(Hola mundo,3),(Lista enlazada,4)]");
+    words.read(text);
+    cout << "Strings leidos con espacios: " << words << endl;
 }
