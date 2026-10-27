@@ -3,9 +3,12 @@
 
 #include "container_stream.h"
 #include "traversalops.h"
+#include "../types.h"
 #include <cstddef>
 #include <initializer_list>
 #include <mutex>
+#include <stdexcept>
+#include <utility>
 
 template <typename Traits> class Heap : public SearchTraversalOps {
     friend class CallOp;
@@ -14,12 +17,11 @@ template <typename Traits> class Heap : public SearchTraversalOps {
     friend class RFirstThatOp;
 
 public:
-    using container_stream_tag = void;
     using traits_type = Traits;
     using value_type = typename Traits::value_type;
     using Node = typename Traits::Node;
     using NodePtr = Node*;
-    using Compare = typename Traits::compare_type;
+    using Compare = typename Traits::Compare;
     using Storage = typename Traits::Storage;
     using ForwardIterator = typename Traits::ForwardIterator;
     using BackwardIterator = typename Traits::BackwardIterator;
@@ -64,19 +66,6 @@ public:
     ForwardIterator end() const { return m_data.end(); }
     BackwardIterator rbegin() const { return m_data.rbegin(); }
     BackwardIterator rend() const { return m_data.rend(); }
-
-    std::ostream& write(std::ostream& os) const {
-        std::lock_guard lock(m_mutex);
-        return container_stream::write(os, m_data.begin(), m_data.end());
-    }
-
-    std::istream& read(std::istream& is) {
-        Heap<Traits> parsed;
-        if (!container_stream::read(is, parsed)) return is;
-        std::lock_guard lock(m_mutex);
-        m_data.swap(parsed.m_data);
-        return is;
-    }
 
     void push(const value_type& value, Ref ref) {
         std::lock_guard<std::mutex> lock(m_mutex);

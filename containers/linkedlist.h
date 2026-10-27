@@ -15,7 +15,6 @@ class LinkedList : public FullTraversalOps {
     friend class RFirstThatOp;
     friend class ApplyFunctionOp;
 public:
-    using container_stream_tag = void;
     using traits_type       = Traits;
     using value_type        = typename Traits::value_type;
     using Node              = typename Traits::Node;
@@ -83,20 +82,6 @@ public:
         corregirPunteros();
     }
 
-    std::ostream& write(std::ostream& os) const {
-        std::lock_guard lock(m_mutex);
-        return container_stream::write(os, begin(), end());
-    }
-
-    std::istream& read(std::istream& is) {
-        LinkedList parsed;
-        if (!container_stream::read(is, parsed)) return is;
-        std::scoped_lock lock(m_mutex, parsed.m_mutex);
-        std::swap(m_pRoot, parsed.m_pRoot);
-        std::swap(m_pTail, parsed.m_pTail);
-        return is;
-    }
-
     // Iterators
     ForwardIterator begin() const { return ForwardIterator(m_pRoot); }
     ForwardIterator end() const { return ForwardIterator(nullptr); }
@@ -152,11 +137,6 @@ void LinkedList<Traits, Double, Circular>::push_back(const value_type& value, Re
     completarInsercion(new_node, previous);
 }
 
-/*
-internalInsert(...) recorre todos los nodos hasta llegar al final, y en la condición de parada
-si el nodo padre es nullptr, crea uno nuevo con el valor y retorna
-insert(...) empieza desde el nodo raiz
-*/
 template <typename Traits, bool Double, bool Circular>
 void LinkedList<Traits, Double, Circular>::internalInsert(const value_type& value, Ref ref, NodePtr& rParent) {
     if (rParent == nullptr || m_comp(value, rParent->getValue())) {

@@ -43,7 +43,6 @@ class Vector : public FullTraversalOps {
     friend class RFirstThatOp;
     friend class ApplyFunctionOp;
 public:
-    using container_stream_tag = void;
     using value_type        = Traits::value_type;
     using Node              = Traits::Node;
     using ForwardIterator   = Traits::ForwardIterator;
@@ -174,20 +173,6 @@ public:
     ConstForwardIterator  end()    const { return ConstForwardIterator(m_data + m_size); }
     ConstBackwardIterator rbegin() const { return ConstBackwardIterator(m_data + m_size - 1); }
     ConstBackwardIterator rend()   const { return ConstBackwardIterator(m_data - 1); }
-
-    // Persistencia
-    ostream &write(ostream &os) const {
-        lock_guard<mutex> lock(m_mutex);
-        return container_stream::write(os, begin(), end());
-    }
-
-    // TODO: implementar la lectura de un vector desde un stream
-    istream &read(istream &is) {
-        Vector parsed;
-        if (!container_stream::read(is, parsed)) return is;
-        swap(parsed);
-        return is;
-    }
 };
 
 #endif // __VECTOR_H__

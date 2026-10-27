@@ -4,7 +4,6 @@
 #include "GeneralNode.h"
 #include "traits.h"
 #include "traversalops.h"
-#include "container_stream.h"
 #include <cstddef>
 #include <initializer_list>
 #include <mutex>
@@ -33,7 +32,6 @@ template <typename Traits> class BinaryTree : public SearchTraversalOps {
     friend class RFirstThatOp;
 
 public:
-    using container_stream_tag = void;
     using value_type = typename Traits::value_type;
     using Node = typename Traits::Node;
     using NodePtr = Node*;
@@ -80,15 +78,6 @@ private:
             throw;
         }
         return copy;
-    }
-
-    void writeNodes(std::ostream& os, NodePtr node, bool& first) const {
-        if (!node) return;
-        if (!first) os << ',';
-        first = false;
-        os << *node;
-        writeNodes(os, node->m_pChild[0], first);
-        writeNodes(os, node->m_pChild[1], first);
     }
 
 public:
@@ -159,23 +148,6 @@ public:
     ForwardIterator end() const { return ForwardIterator(nullptr); }
     BackwardIterator rbegin() const { return BackwardIterator(m_root); }
     BackwardIterator rend() const { return BackwardIterator(nullptr); }
-
-    std::ostream& write(std::ostream& os) const {
-        std::lock_guard lock(m_mutex);
-        os << '[';
-        bool first = true;
-        writeNodes(os, m_root, first);
-        return os << ']';
-    }
-
-    std::istream& read(std::istream& is) {
-        BinaryTree parsed;
-        if (!container_stream::read(is, parsed)) return is;
-        std::lock_guard lock(m_mutex);
-        swapState(parsed);
-        return is;
-    }
-
 };
 
 #endif // __BINARYTREE_H__

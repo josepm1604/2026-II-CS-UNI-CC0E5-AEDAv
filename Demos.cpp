@@ -33,12 +33,17 @@ template <typename Node> void PrintNode(const Node& node, ostream& os) {
 }
 const int NThreads = 5;
 
-template <typename Value> void PrintColor(const Value& value, const char* color = "\033[1;36m") {
-    const bool useColor = isatty(fileno(stdout)) && std::getenv("NO_COLOR") == nullptr;
-    if (useColor) cout << color;
-    cout << value;
-    if (useColor) cout << "\033[0m";
-    cout << '\n';
+template <typename Value>
+void PrintColor(const Value& value,
+                const string& color = "\033[1;36m",
+                ostream& os = cout) {
+    const bool isTerminal = (&os == &cout && isatty(fileno(stdout))) ||
+                            (&os == &cerr && isatty(fileno(stderr)));
+    const bool useColor = isTerminal && std::getenv("NO_COLOR") == nullptr;
+    if (useColor) os << color;
+    os << value;
+    if (useColor) os << "\033[0m";
+    os << '\n';
 }
 
 template <typename Function> void WithDemoFile(const string& filename, Function function) {
@@ -232,38 +237,6 @@ template <typename Container> void TestCopyAndClear(Container& container, const 
     cout << name << ": clear, copia y lectura invalida OK\n";
 }
 
-template <typename Container> void TestStructure(Container& container, const string& name);
-
-void DemoVector() {
-    PrintColor("DemoVector");
-
-    VectorAsc<TX> vec;
-    TestStructure(vec, "Vector");
-
-    VectorAsc<string> strVec;
-    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
-    TestTraversal(strVec, "Vector<string>");
-
-    const auto& constVec = vec;
-    vector<Ref> forwardRefs;
-    vector<Ref> backwardRefs;
-    for (auto it = constVec.begin(); it != constVec.end(); ++it)
-        forwardRefs.push_back(it->getRef());
-    for (auto it = constVec.rbegin(); it != constVec.rend(); ++it)
-        backwardRefs.push_back(it->getRef());
-    std::reverse(backwardRefs.begin(), backwardRefs.end());
-    if (forwardRefs.size() != vec.size() || forwardRefs != backwardRefs)
-        throw runtime_error("Vector const: recorridos inconsistentes");
-
-    VectorAsc<TX> emptyVector;
-    if (emptyVector.rbegin() != emptyVector.rend())
-        throw runtime_error("Vector vacio: recorrido inverso incorrecto");
-    const auto& constEmpty = emptyVector;
-    if (constEmpty.begin() != constEmpty.end() || constEmpty.rbegin() != constEmpty.rend())
-        throw runtime_error("Vector const vacio: recorrido incorrecto");
-    cout << "Vector: recorrido const y vacio OK\n";
-}
-
 template <typename Container>
 void TestRaceCondition(const string& name,
                        const vector<pair<typename Container::value_type, Ref>>& values) {
@@ -305,6 +278,46 @@ void TestRaceCondition(const string& name,
              << "sincroniza correctamente las inserciones concurrentes" << endl;
 }
 
+template <typename Container> void TestStructure(Container& container, const string& name) {
+    PrintColor(name);
+    const vector<pair<typename Container::value_type, Ref>> values{{5, 50}, {1, 10}, {4, 40},
+                                                                   {2, 20}, {7, 70}, {5, 51}};
+
+    TestContainer(container, values, name + ".txt");
+    TestTraversal(container, name);
+
+    if constexpr (requires {
+                      container.top();
+                      container.pop();
+                  }) {
+        cout << "Top: " << container.top() << '\n';
+        cout << "Orden de extraccion: ";
+        while (!container.empty())
+            cout << container.pop() << ' ';
+        cout << '\n';
+    }
+
+    container.clear();
+    TestGenericContainer(container, name + "_persist.txt");
+    TestInvalidRead(container, name);
+
+    if constexpr (requires(const Container& source, Container& target) {
+                      Container(source);
+                      target = source;
+                  }) {
+        Container copyAndClear;
+        TestCopyAndClear(copyAndClear, name);
+    }
+
+    TestRaceCondition<Container>(name, values);
+}
+
+template <typename Container> void TestStructure(const string& name) {
+    Container container;
+    TestStructure(container, name);
+}
+
+// Demostraciones
 template <typename Container> void DemoRaceCondition(const string& name) {
     PrintColor("DemoRaceCondition (" + name + ")");
     const size_t N = 200000;
@@ -314,6 +327,36 @@ template <typename Container> void DemoRaceCondition(const string& name) {
 
     cout << "DemoRaceCondition (" << NThreads << " hilos, push_back):\n";
     TestRaceCondition<Container>(name, values);
+}
+
+void DemoVector() {
+    PrintColor("DemoVector");
+
+    VectorAsc<TX> vec;
+    TestStructure(vec, "Vector");
+
+    VectorAsc<string> strVec;
+    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
+    TestTraversal(strVec, "Vector<string>");
+
+    const auto& constVec = vec;
+    vector<Ref> forwardRefs;
+    vector<Ref> backwardRefs;
+    for (auto it = constVec.begin(); it != constVec.end(); ++it)
+        forwardRefs.push_back(it->getRef());
+    for (auto it = constVec.rbegin(); it != constVec.rend(); ++it)
+        backwardRefs.push_back(it->getRef());
+    std::reverse(backwardRefs.begin(), backwardRefs.end());
+    if (forwardRefs.size() != vec.size() || forwardRefs != backwardRefs)
+        throw runtime_error("Vector const: recorridos inconsistentes");
+
+    VectorAsc<TX> emptyVector;
+    if (emptyVector.rbegin() != emptyVector.rend())
+        throw runtime_error("Vector vacio: recorrido inverso incorrecto");
+    const auto& constEmpty = emptyVector;
+    if (constEmpty.begin() != constEmpty.end() || constEmpty.rbegin() != constEmpty.rend())
+        throw runtime_error("Vector const vacio: recorrido incorrecto");
+    cout << "Vector: recorrido const y vacio OK\n";
 }
 
 void DemoLinkedList() {
@@ -389,45 +432,6 @@ void DemoCircularDoubleLinkedList() {
     cout << "Ciclo descendente hacia atras: ";
     PrintCircularTraversal(descendente.rbegin(), descendente.rend());
     DemoRaceCondition<AscList>("CircularDoubleLinkedList");
-}
-
-template <typename Container> void TestStructure(Container& container, const string& name) {
-    PrintColor(name);
-    const vector<pair<typename Container::value_type, Ref>> values{{5, 50}, {1, 10}, {4, 40},
-                                                                   {2, 20}, {7, 70}, {5, 51}};
-
-    TestContainer(container, values, name + ".txt");
-    TestTraversal(container, name);
-
-    if constexpr (requires {
-                      container.top();
-                      container.pop();
-                  }) {
-        cout << "Top: " << container.top() << '\n';
-        cout << "Orden de extraccion: ";
-        while (!container.empty())
-            cout << container.pop() << ' ';
-        cout << '\n';
-    }
-
-    container.clear();
-    TestGenericContainer(container, name + "_persist.txt");
-    TestInvalidRead(container, name);
-
-    if constexpr (requires(const Container& source, Container& target) {
-                      Container(source);
-                      target = source;
-                  }) {
-        Container copyAndClear;
-        TestCopyAndClear(copyAndClear, name);
-    }
-
-    TestRaceCondition<Container>(name, values);
-}
-
-template <typename Container> void TestStructure(const string& name) {
-    Container container;
-    TestStructure(container, name);
 }
 
 void DemoHeap() {

@@ -3,7 +3,7 @@
 
 #include "listnodes.h"
 #include "GeneralNode.h"
-#include "treeiterator.h"
+#include "binarytreeiterator.h"
 #include <functional>
 
 template <typename T> class VectorForwardIterator;
@@ -34,11 +34,11 @@ template <typename T, typename NodeType, typename Comparator> struct ListTraits 
     using Compare = Comparator;
 };
 
-template <typename T, typename _Compare = std::less<T>>
-struct LinkedListTraits : ListTraits<T, LinkedListNode<T>, _Compare> {};
+template <typename T, typename Comparator = std::less<T>>
+struct LinkedListTraits : ListTraits<T, LinkedListNode<T>, Comparator> {};
 
-template <typename T, typename _Compare = std::less<T>>
-struct DoubleLinkedListTraits : ListTraits<T, DoubleLinkedNode<T>, _Compare> {
+template <typename T, typename Comparator = std::less<T>>
+struct DoubleLinkedListTraits : ListTraits<T, DoubleLinkedNode<T>, Comparator> {
     using BackwardIterator = DoubleLinkedListBackwardIterator<T>;
 };
 
@@ -55,7 +55,7 @@ struct HeapTraits {
     using value_type = T;
     using Storage = Vector<VectorAscTraits<T>>;
     using Node = typename Storage::Node;
-    using compare_type = Comparator;
+    using Compare = Comparator;
     using ForwardIterator = typename Storage::ConstForwardIterator;
     using BackwardIterator = typename Storage::ConstBackwardIterator;
 };
