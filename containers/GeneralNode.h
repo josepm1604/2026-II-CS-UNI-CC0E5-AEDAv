@@ -2,6 +2,16 @@
 #define __GENERAL_NODE_H__
 #include <iostream>
 #include "../types.h" // Ref
+
+struct StreamDelimiters {
+    using Delim = std::istream::char_type;
+    static constexpr Delim container_open  = '[';
+    static constexpr Delim container_close = ']';
+    static constexpr Delim separator       = ',';
+    static constexpr Delim node_open       = '(';
+    static constexpr Delim node_close      = ')';
+};
+
 template <typename T>
 struct GeneralNode{
 private:
@@ -15,16 +25,26 @@ public:
     Ref  getRef()   const { return m_ref;   }
     T&   value()          { return m_value; } // acceso mutable para ApplyFunction
 
-    using Delim = std::istream::char_type;
+    using Delim = StreamDelimiters::Delim;
 
     friend std::ostream &operator <<(std::ostream &os, const GeneralNode<T> &node) {
-        os << "(" << node.getValue() << "," << node.getRef() << ")";
+        os << StreamDelimiters::node_open
+           << node.getValue()
+           << StreamDelimiters::separator
+           << node.getRef()
+           << StreamDelimiters::node_close;
         return os;
     }
 
     friend std::istream &operator >>(std::istream &is, GeneralNode<T> &node){
-        Delim d;
-        is >> d >> node.m_value >> d >> node.m_ref >> d;
+        Delim open{}, sep{}, close{};
+        if (!(is >> open) || open != StreamDelimiters::node_open ||
+            !(is >> node.m_value) ||
+            !(is >> sep) || sep != StreamDelimiters::separator ||
+            !(is >> node.m_ref) ||
+            !(is >> close) || close != StreamDelimiters::node_close) {
+            is.setstate(std::ios::failbit);
+        }
         return is;
     }
 };

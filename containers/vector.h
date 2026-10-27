@@ -4,7 +4,10 @@
 #include <initializer_list>
 #include "GeneralIterator.h"
 #include "GeneralNode.h"
+#include "container_stream.h"
+#include "traversalops.h"
 #include "../foreach.h"
+#include "traits.h"
 #include "../types.h" // Ref
 using namespace std;
 
@@ -32,26 +35,25 @@ public:
     VectorBackwardIterator& operator++() { --Parent::m_ptr; return *this; }
 };
 
-template <typename T>
-struct VectorAscTraits {
-    using value_type        = T;
-    using Node              = GeneralNode<T>;
-    using ForwardIterator   = VectorForwardIterator<Node>;  // itera sobre Node, no sobre T
-    using BackwardIterator  = VectorBackwardIterator<Node>; // itera sobre Node, no sobre T
-};
-
 template <typename Traits>
-class Vector {
+class Vector : public FullTraversalOps {
+    friend class CallOp;
+    friend class RCallOp;
+    friend class FirstThatOp;
+    friend class RFirstThatOp;
+    friend class ApplyFunctionOp;
 public:
     using value_type        = Traits::value_type;
     using Node              = Traits::Node;
     using ForwardIterator   = Traits::ForwardIterator;
     using BackwardIterator  = Traits::BackwardIterator;
+    using ConstForwardIterator = VectorForwardIterator<const Node>;
+    using ConstBackwardIterator = VectorBackwardIterator<const Node>;
 private:
     Node        *m_data     = nullptr;   // puntero al arreglo dinámico
     size_t       m_size     = 0,         // cantidad actual
                  m_capacity = 0;         // capacidad
-    mutex        m_mutex;                // mutex para sincronización
+    mutable mutex m_mutex;               // mutex para sincronización
 
     void resize(size_t new_cap) {
         if (new_cap <= m_capacity) return;
@@ -77,6 +79,7 @@ public:
     }
 
     Vector(const Vector& other) {
+        lock_guard<mutex> lock(other.m_mutex);
         resize(other.m_size);
         for (size_t i = 0; i < other.m_size; ++i)
             m_data[i] = other.m_data[i];
@@ -85,6 +88,7 @@ public:
 
     // Move constructor and move assignment operator
     Vector(Vector&& other) noexcept {
+        lock_guard<mutex> lock(other.m_mutex);
         m_data     = std::exchange(other.m_data, nullptr);
         m_size     = std::exchange(other.m_size, 0);
         m_capacity = std::exchange(other.m_capacity, 0);
@@ -93,12 +97,28 @@ public:
     // Move assignment operator
     Vector& operator=(Vector&& other) noexcept {
         if (this != &other) {
-            clear();
+            scoped_lock lock(m_mutex, other.m_mutex);
+            delete[] m_data;
             m_data     = std::exchange(other.m_data, nullptr);
             m_size     = std::exchange(other.m_size, 0);
             m_capacity = std::exchange(other.m_capacity, 0);
         }
         return *this;
+    }
+
+    Vector& operator=(const Vector& other) {
+        if (this == &other) return *this;
+        Vector copy(other);
+        swap(copy);
+        return *this;
+    }
+
+    void swap(Vector& other) noexcept {
+        if (this == &other) return;
+        scoped_lock lock(m_mutex, other.m_mutex);
+        std::swap(m_data, other.m_data);
+        std::swap(m_size, other.m_size);
+        std::swap(m_capacity, other.m_capacity);
     }
 
     void push_back(const value_type& value, Ref ref) {
@@ -122,14 +142,19 @@ public:
         return m_data[index];
     }
 
+    const Node& operator[](size_t index) const {
+        if (index >= m_size) throw std::out_of_range("Indice fuera de rango");
+        return m_data[index];
+    }
+
     Node& at(size_t index) {
         if (index >= m_size) throw std::out_of_range("Indice fuera de rango");
         return m_data[index];
     }
 
-    size_t size()     const { return m_size; }
-    size_t capacity() const { return m_capacity; }
-    bool   empty()    const { return m_size == 0; }
+    size_t size()     const { lock_guard<mutex> lock(m_mutex); return m_size; }
+    size_t capacity() const { lock_guard<mutex> lock(m_mutex); return m_capacity; }
+    bool   empty()    const { lock_guard<mutex> lock(m_mutex); return m_size == 0; }
 
     void clear() {
         lock_guard<mutex> lock(m_mutex);
@@ -144,60 +169,10 @@ public:
     BackwardIterator rbegin() { return BackwardIterator(m_data + m_size - 1); }
     BackwardIterator rend()   { return BackwardIterator(m_data - 1); }
 
-    // Persistencia
-    ostream &write(ostream &os){
-        // TODO: convertirla en una linea que usa la funcion ApplyFunction generica
-        lock_guard<mutex> lock(m_mutex);
-        os << "[";
-        for (size_t i = 0; i < size()-1; ++i)
-            os << m_data[i] << ",";
-        if (size() > 0)
-            os << m_data[size()-1];
-        return os << "]";
-    }
-
-    // TODO: implementar la lectura de un vector desde un stream
-    istream &read(istream &is){
-        // Implementation for reading vector from stream
-    }
-
-    template <typename Func, typename... Args>
-    void ApplyFunction(Func func, Args... args) {
-        call(func, std::forward<Args>(args)...);
-    }
-    template <typename Func, typename... Args>
-    Node& FirstThat(Func func, Args... args) {
-        return call(func, std::forward<Args>(args)...);
-    }
-    template<typename Func, typename... Args>
-    decltype(auto) call(Func func, Args&&... args)
-    {    lock_guard<mutex> lock(m_mutex);
-        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
-            ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
-        else // return type is not void:
-            return ::call(begin(), end(), std::forward<Func>(func), std::forward<Args>(args)...);
-    }
-
-    // Igual que call(), pero recorriendo el container en sentido inverso
-    // (rbegin()/rend()) en vez de hacia adelante.
-    template<typename Func, typename... Args>
-    decltype(auto) rcall(Func func, Args&&... args)
-    {    lock_guard<mutex> lock(m_mutex);
-        if constexpr(is_void_v<invoke_result_t<Func, Node&, Args...>>)
-            ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
-        else // return type is not void:
-            return ::call(rbegin(), rend(), std::forward<Func>(func), std::forward<Args>(args)...);
-    }
+    ConstForwardIterator  begin()  const { return ConstForwardIterator(m_data); }
+    ConstForwardIterator  end()    const { return ConstForwardIterator(m_data + m_size); }
+    ConstBackwardIterator rbegin() const { return ConstBackwardIterator(m_data + m_size - 1); }
+    ConstBackwardIterator rend()   const { return ConstBackwardIterator(m_data - 1); }
 };
-
-template <typename T>
-ostream& operator<<(ostream &os, Vector<T> &vec) {
-    return vec.write(os);
-}
-
-template <typename T>
-istream& operator>>(istream &is, Vector<T> &vec) {
-    return vec.read(is);
-}
 
 #endif // __VECTOR_H__
