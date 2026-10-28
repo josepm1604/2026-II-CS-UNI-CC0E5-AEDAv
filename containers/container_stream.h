@@ -5,6 +5,7 @@
 #include <concepts>
 #include <istream>
 #include <ostream>
+#include <utility>
 #include <vector>
 
 namespace container_stream {
@@ -41,14 +42,15 @@ concept ReadableContainer = PrintableContainer<Container> &&
     c.push_back(value, ref);
 };
 
-template <class It>
-std::ostream& write(std::ostream& os, It first, It last) {
+template <PrintableContainer Container>
+std::ostream& write(std::ostream& os, const Container& container) {
     os << StreamDelimiters::container_open;
-    if (first != last) {
-        os << *first;
-        while (++first != last)
-            os << StreamDelimiters::separator << *first;
-    }
+    bool first = true;
+    container.call([&](const auto& node) {
+        if (!first) os << StreamDelimiters::separator;
+        first = false;
+        os << node;
+    });
     return os << StreamDelimiters::container_close;
 }
 
@@ -77,16 +79,25 @@ bool read_nodes(std::istream& is, std::vector<GeneralNode<T>>& nodes) {
 template <ReadableContainer Container>
 void insert_nodes(Container& destination,
                   const std::vector<GeneralNode<typename Container::value_type>>& nodes) {
-    destination.clear();
-    for (const auto& node : nodes)
-        destination.push_back(node.getValue(), node.getRef());
+    if constexpr (requires(Container& target, Container&& source) {
+                      target = std::move(source);
+                  }) {
+        Container temp;
+        for (const auto& node : nodes)
+            temp.push_back(node.getValue(), node.getRef());
+        destination = std::move(temp);
+    } else {
+        destination.clear();
+        for (const auto& node : nodes)
+            destination.push_back(node.getValue(), node.getRef());
+    }
 }
 
 } // namespace container_stream
 
 template <container_stream::PrintableContainer Container>
 std::ostream& operator<<(std::ostream& os, const Container& container) {
-    return container_stream::write(os, container.begin(), container.end());
+    return container_stream::write(os, container);
 }
 
 template <container_stream::ReadableContainer Container>
