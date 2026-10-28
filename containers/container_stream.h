@@ -2,6 +2,7 @@
 #define CONTAINERS_CONTAINER_STREAM_H
 
 #include "GeneralNode.h"
+#include "traversalops.h"
 #include <concepts>
 #include <istream>
 #include <ostream>
@@ -21,26 +22,30 @@ inline bool expect(std::istream& is, Delim wanted) {
 }
 
 template <class Container>
-concept PrintableContainer = requires(const Container& c, std::ostream& os) {
-    typename Container::Node;
-    c.begin();
-    c.end();
-    requires std::same_as<decltype(c.begin()), decltype(c.end())>;
-    c.begin() != c.end();
-    ++c.begin();
-    os << *c.begin();
-};
+concept PrintableContainer =
+    std::derived_from<Container, PrintableOp> &&
+    requires(const Container& c, std::ostream& os) {
+        typename Container::Node;
+        c.begin();
+        c.end();
+        requires std::same_as<decltype(c.begin()), decltype(c.end())>;
+        c.begin() != c.end();
+        ++c.begin();
+        os << *c.begin();
+    };
 
 template <class Container>
-concept ReadableContainer = PrintableContainer<Container> &&
+concept ReadableContainer =
+    std::derived_from<Container, ReadableOp> &&
+    PrintableContainer<Container> &&
     requires(Container& c, typename Container::value_type value, Ref ref,
              std::istream& is, GeneralNode<typename Container::value_type>& node) {
-    typename Container::value_type;
-    requires std::default_initializable<GeneralNode<typename Container::value_type>>;
-    is >> node;
-    c.clear();
-    c.push_back(value, ref);
-};
+        typename Container::value_type;
+        requires std::default_initializable<GeneralNode<typename Container::value_type>>;
+        is >> node;
+        c.clear();
+        c.push_back(value, ref);
+    };
 
 template <PrintableContainer Container>
 std::ostream& write(std::ostream& os, const Container& container) {

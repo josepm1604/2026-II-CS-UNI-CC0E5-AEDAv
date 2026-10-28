@@ -63,13 +63,19 @@ public:
     }
 };
 
+class PrintableOp {};
+
+class ReadableOp {};
+
 template <class... Ops>
 class TraversalOps : public Ops... {};
 
 using FullTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp,
-                                      RFirstThatOp, ApplyFunctionOp>;
+                                      RFirstThatOp, ApplyFunctionOp,
+                                      PrintableOp, ReadableOp>;
 
 using SearchTraversalOps = TraversalOps<CallOp, RCallOp, FirstThatOp,
-                                        RFirstThatOp>;
+                                         RFirstThatOp, PrintableOp,
+                                         ReadableOp>;
 
 #endif // TRAVERSALOPS_H
