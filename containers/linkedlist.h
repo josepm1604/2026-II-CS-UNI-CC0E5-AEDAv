@@ -1,8 +1,11 @@
 #ifndef __LINKEDLIST_H__
 #define __LINKEDLIST_H__
+#include <initializer_list>
+#include <mutex>
 #include "GeneralContainer.h"
 #include "GeneralIterator.h"
 #include "GeneralNode.h"
+#include "mixins.h"
 
 template <typename T>
 class LinkedListNode : public GeneralNode<T> {
