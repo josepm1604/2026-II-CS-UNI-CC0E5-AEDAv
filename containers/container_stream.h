@@ -2,7 +2,6 @@
 #define CONTAINERS_CONTAINER_STREAM_H
 
 #include "GeneralNode.h"
-#include "traversalops.h"
 #include <concepts>
 #include <istream>
 #include <ostream>
@@ -13,17 +12,8 @@ namespace container_stream {
 
 using Delim = StreamDelimiters::Delim;
 
-inline bool expect(std::istream& is, Delim wanted) {
-    Delim actual;
-    if (!(is >> actual)) return false;
-    if (actual == wanted) return true;
-    is.setstate(std::ios::failbit);
-    return false;
-}
-
 template <class Container>
 concept PrintableContainer =
-    std::derived_from<Container, PrintableOp> &&
     requires(const Container& c, std::ostream& os) {
         typename Container::Node;
         c.begin();
@@ -36,7 +26,6 @@ concept PrintableContainer =
 
 template <class Container>
 concept ReadableContainer =
-    std::derived_from<Container, ReadableOp> &&
     PrintableContainer<Container> &&
     requires(Container& c, typename Container::value_type value, Ref ref,
              std::istream& is, GeneralNode<typename Container::value_type>& node) {
@@ -61,7 +50,7 @@ std::ostream& write(std::ostream& os, const Container& container) {
 
 template <typename T>
 bool read_nodes(std::istream& is, std::vector<GeneralNode<T>>& nodes) {
-    if (!expect(is, StreamDelimiters::container_open)) return false;
+    if (!StreamDelimiters::expect(is, StreamDelimiters::container_open)) return false;
     is >> std::ws;
     if (is.peek() == StreamDelimiters::container_close) {
         is.get();
@@ -98,19 +87,14 @@ void insert_nodes(Container& destination,
     }
 }
 
-} // namespace container_stream
-
-template <container_stream::PrintableContainer Container>
-std::ostream& operator<<(std::ostream& os, const Container& container) {
-    return container_stream::write(os, container);
-}
-
-template <container_stream::ReadableContainer Container>
-std::istream& operator>>(std::istream& is, Container& container) {
+template <ReadableContainer Container>
+std::istream& read(std::istream& is, Container& container) {
     std::vector<GeneralNode<typename Container::value_type>> nodes;
-    if (container_stream::read_nodes(is, nodes))
-        container_stream::insert_nodes(container, nodes);
+    if (read_nodes(is, nodes))
+        insert_nodes(container, nodes);
     return is;
 }
+
+} // namespace container_stream
 
 #endif

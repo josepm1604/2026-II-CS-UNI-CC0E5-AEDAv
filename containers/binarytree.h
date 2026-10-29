@@ -4,43 +4,41 @@
 #include "GeneralNode.h"
 #include "traits.h"
 #include "traversalops.h"
+#include <algorithm>
 #include <cstddef>
 #include <initializer_list>
 #include <mutex>
+#include <ostream>
+#include <string>
+#include <type_traits>
 #include <utility>
 
-template <typename T> class BinaryTreeNode : public GeneralNode<T> {
+template <typename T, typename Derived = void>
+class BinaryTreeNode : public GeneralNode<T> {
 public:
     using Parent = GeneralNode<T>;
     using Parent::Parent;
-    using NodePtr = BinaryTreeNode<T>*;
-
-    const BinaryTreeNode<T>* child(bool right) const { return m_pChild[right]; }
-
-private:
-    template <typename> friend class BinaryTree;
-    template <typename, bool> friend class BinaryTreeIterator;
+    using Node = NodeSelf<BinaryTreeNode<T>, Derived>;
+    using NodePtr = Node*;
 
     NodePtr m_pChild[2] = {nullptr, nullptr};
     NodePtr m_pParent = nullptr;
 };
 
 template <typename Traits> class BinaryTree : public SearchTraversalOps {
-    friend class CallOp;
-    friend class RCallOp;
-    friend class FirstThatOp;
-    friend class RFirstThatOp;
-
 public:
     using value_type = typename Traits::value_type;
     using Node = typename Traits::Node;
     using NodePtr = Node*;
     using ForwardIterator = typename Traits::ForwardIterator;
     using BackwardIterator = typename Traits::BackwardIterator;
+
+    template <TreeOrder Order, bool Reverse>
+    using Traversal = TreeTraversal<BinaryTreeIterator<const Node, Order, Reverse>>;
+
 private:
     NodePtr m_root = nullptr; // root of the binary tree
     std::size_t m_size = 0;
-    mutable std::mutex m_mutex;
 
     void internal_insert(NodePtr& node, const value_type& value, Ref ref) {
         NodePtr* slot = &node;
@@ -52,6 +50,14 @@ private:
         *slot = new Node(value, ref);
         (*slot)->m_pParent = parent;
         ++m_size;
+        after_insert(*slot);
+    }
+
+    NodePtr find_node(const value_type& value) const {
+        NodePtr node = m_root;
+        while (node && node->getValue() != value)
+            node = node->m_pChild[value > node->getValue()];
+        return node;
     }
 
     void swapState(BinaryTree& other) {
@@ -68,8 +74,9 @@ private:
 
     NodePtr clone(NodePtr source, NodePtr parent = nullptr) {
         if (!source) return nullptr;
-        NodePtr copy = new Node(source->getValue(), source->getRef());
+        NodePtr copy = new Node(*source);
         copy->m_pParent = parent;
+        copy->m_pChild[0] = copy->m_pChild[1] = nullptr;
         try {
             copy->m_pChild[0] = clone(source->m_pChild[0], copy);
             copy->m_pChild[1] = clone(source->m_pChild[1], copy);
@@ -78,6 +85,47 @@ private:
             throw;
         }
         return copy;
+    }
+
+    std::size_t height(NodePtr node) const {
+        if (!node) return 0;
+        return 1 + std::max(height(node->m_pChild[0]), height(node->m_pChild[1]));
+    }
+
+    void print_sideways(std::ostream& os, NodePtr node, std::size_t depth) const {
+        if (!node) return;
+        print_sideways(os, node->m_pChild[1], depth + 1);
+        os << std::string(depth * 10, ' ');
+        print_node(os, *node);
+        os << '\n';
+        print_sideways(os, node->m_pChild[0], depth + 1);
+    }
+
+    template <TreeOrder Order, bool Reverse> Traversal<Order, Reverse> traversal() const {
+        return Traversal<Order, Reverse>(m_root);
+    }
+
+protected:
+    virtual void after_insert(NodePtr) {}
+    virtual void after_remove(NodePtr, bool) {}
+    virtual NodePtr replacement(NodePtr node) const { return extreme(node->m_pChild[1], 0); }
+    virtual void print_node(std::ostream& os, const Node& node) const { os << node; }
+
+    NodePtr& link_of(NodePtr node) {
+        NodePtr parent = node->m_pParent;
+        if (!parent) return m_root;
+        return parent->m_pChild[parent->m_pChild[1] == node];
+    }
+
+    NodePtr rotate(NodePtr x, bool dir) {
+        NodePtr y = x->m_pChild[!dir];
+        x->m_pChild[!dir] = y->m_pChild[dir];
+        if (y->m_pChild[dir]) y->m_pChild[dir]->m_pParent = x;
+        link_of(x) = y;
+        y->m_pParent = x->m_pParent;
+        y->m_pChild[dir] = x;
+        x->m_pParent = y;
+        return y;
     }
 
 public:
@@ -99,34 +147,47 @@ public:
         m_size = other.m_size;
     }
 
-    BinaryTree& operator=(const BinaryTree& other) {
-        if (this == &other) return *this;
-        BinaryTree copy(other);
-        std::lock_guard lock(m_mutex);
-        swapState(copy);
-        return *this;
-    }
-
     BinaryTree(BinaryTree&& other) {
         std::lock_guard lock(other.m_mutex);
-        m_root = std::exchange(other.m_root, nullptr);
-        m_size = std::exchange(other.m_size, 0);
+        swapState(other);
     }
 
-    BinaryTree& operator=(BinaryTree&& other) {
-        if (this == &other) return *this;
-        std::scoped_lock lock(m_mutex, other.m_mutex);
-        destroy(m_root);
-        m_root = std::exchange(other.m_root, nullptr);
-        m_size = std::exchange(other.m_size, 0);
+    BinaryTree& operator=(BinaryTree other) {
+        std::lock_guard lock(m_mutex);
+        swapState(other);
         return *this;
     }
 
-    ~BinaryTree() { clear(); }
+    virtual ~BinaryTree() { clear(); }
 
     void insert(const value_type& value, Ref ref) {
         std::lock_guard lock(m_mutex);
         internal_insert(m_root, value, ref);
+    }
+
+    bool remove(const value_type& value) {
+        std::lock_guard lock(m_mutex);
+        NodePtr node = find_node(value);
+        if (!node) return false;
+        if (node->m_pChild[0] && node->m_pChild[1]) {
+            NodePtr repl = replacement(node);
+            static_cast<GeneralNode<value_type>&>(*node) = *repl;
+            node = repl;
+        }
+        NodePtr child = node->m_pChild[0] ? node->m_pChild[0] : node->m_pChild[1];
+        NodePtr parent = node->m_pParent;
+        bool side = parent && parent->m_pChild[1] == node;
+        link_of(node) = child;
+        if (child) child->m_pParent = parent;
+        delete node;
+        --m_size;
+        after_remove(parent, side);
+        return true;
+    }
+
+    bool contains(const value_type& value) const {
+        std::lock_guard lock(m_mutex);
+        return find_node(value) != nullptr;
     }
 
     void push_back(const value_type& value, Ref ref) { insert(value, ref); }
@@ -137,6 +198,11 @@ public:
         return m_size;
     }
 
+    std::size_t height() const {
+        std::lock_guard lock(m_mutex);
+        return height(m_root);
+    }
+
     void clear() {
         std::lock_guard lock(m_mutex);
         destroy(m_root);
@@ -144,10 +210,22 @@ public:
         m_size = 0;
     }
 
+    void print_sideways(std::ostream& os) const {
+        std::lock_guard lock(m_mutex);
+        print_sideways(os, m_root, 0);
+    }
+
     ForwardIterator begin() const { return ForwardIterator(m_root); }
     ForwardIterator end() const { return ForwardIterator(nullptr); }
     BackwardIterator rbegin() const { return BackwardIterator(m_root); }
     BackwardIterator rend() const { return BackwardIterator(nullptr); }
+
+    auto InOrder() const { return traversal<TreeOrder::InOrder, false>(); }
+    auto ReverseInOrder() const { return traversal<TreeOrder::InOrder, true>(); }
+    auto PreOrder() const { return traversal<TreeOrder::PreOrder, false>(); }
+    auto ReversePreOrder() const { return traversal<TreeOrder::PostOrder, true>(); }
+    auto PostOrder() const { return traversal<TreeOrder::PostOrder, false>(); }
+    auto ReversePostOrder() const { return traversal<TreeOrder::PreOrder, true>(); }
 };
 
 #endif // __BINARYTREE_H__

@@ -14,9 +14,10 @@ struct PrevLink {
   Node* m_pPrev = nullptr;
 };
 
-template <typename T>
-class LinkedListNode : public GeneralNode<T>, public NextLink<LinkedListNode<T>> {
-    using Node = LinkedListNode<T>;
+template <typename T, typename Derived = void>
+class LinkedListNode : public GeneralNode<T>,
+                       public NextLink<NodeSelf<LinkedListNode<T>, Derived>> {
+    using Node = NodeSelf<LinkedListNode<T>, Derived>;
 public:
     LinkedListNode() : GeneralNode<T>(T{}, Ref{}) {}
     LinkedListNode(const T& value, Ref ref, Node* pNext) : GeneralNode<T>(value, ref) {
@@ -25,18 +26,15 @@ public:
 };
 
 template <typename T>
-class DoubleLinkedNode : public LinkedListNode<T>,
-                         public NextLink<DoubleLinkedNode<T>>,
+class DoubleLinkedNode : public LinkedListNode<T, DoubleLinkedNode<T>>,
                          public PrevLink<DoubleLinkedNode<T>> {
   using Node = DoubleLinkedNode<T>;
+  using Parent = LinkedListNode<T, Node>;
 
 public:
-  using NextLink<Node>::m_pNext;
-
   DoubleLinkedNode() = default;
   DoubleLinkedNode(const T &value, Ref ref, Node *pNext, Node *pPrev = nullptr)
-      : LinkedListNode<T>(value, ref, nullptr) {
-    this->m_pNext = pNext;
+      : Parent(value, ref, pNext) {
     this->m_pPrev = pPrev;
   }
 };

@@ -1,6 +1,7 @@
 #ifndef __GENERAL_NODE_H__
 #define __GENERAL_NODE_H__
 #include <iostream>
+#include <type_traits>
 #include "../types.h" // Ref
 
 struct StreamDelimiters {
@@ -10,7 +11,20 @@ struct StreamDelimiters {
     static constexpr Delim separator       = ',';
     static constexpr Delim node_open       = '(';
     static constexpr Delim node_close      = ')';
+
+    // Lee un delimitador y marca failbit si no es el esperado
+    static bool expect(std::istream& is, Delim wanted) {
+        Delim actual;
+        if (!(is >> actual)) return false;
+        if (actual == wanted) return true;
+        is.setstate(std::ios::failbit);
+        return false;
+    }
 };
+
+// Tipo del nodo final en jerarquias CRTP: Self si Derived es void, si no Derived
+template <typename Self, typename Derived>
+using NodeSelf = std::conditional_t<std::is_void_v<Derived>, Self, Derived>;
 
 template <typename T>
 struct GeneralNode{
@@ -37,14 +51,10 @@ public:
     }
 
     friend std::istream &operator >>(std::istream &is, GeneralNode<T> &node){
-        Delim open{}, sep{}, close{};
-        if (!(is >> open) || open != StreamDelimiters::node_open ||
-            !(is >> node.m_value) ||
-            !(is >> sep) || sep != StreamDelimiters::separator ||
-            !(is >> node.m_ref) ||
-            !(is >> close) || close != StreamDelimiters::node_close) {
-            is.setstate(std::ios::failbit);
-        }
+        using SD = StreamDelimiters;
+        static_cast<void>(SD::expect(is, SD::node_open) && is >> node.m_value &&
+                          SD::expect(is, SD::separator) && is >> node.m_ref &&
+                          SD::expect(is, SD::node_close));
         return is;
     }
 };

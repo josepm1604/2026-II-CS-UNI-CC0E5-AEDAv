@@ -6,24 +6,26 @@
 #include "binarytreeiterator.h"
 #include <functional>
 
-template <typename T> class VectorForwardIterator;
-template <typename T> class VectorBackwardIterator;
+template <typename T, bool Reverse> class VectorIterator;
 template <typename Traits> class Vector;
-template <typename T> class BinaryTreeNode;
+template <typename T, typename Derived> class BinaryTreeNode;
+template <typename T> class AVLNode;
 
 template <typename T> struct VectorAscTraits {
     using value_type = T;
     using Node = GeneralNode<T>;
-    using ForwardIterator = VectorForwardIterator<Node>;
-    using BackwardIterator = VectorBackwardIterator<Node>;
+    using ForwardIterator = VectorIterator<Node, false>;
+    using BackwardIterator = VectorIterator<Node, true>;
 };
 
-template <typename T> struct BinaryTreeTraits {
+template <typename T, typename NodeType = BinaryTreeNode<T, void>> struct BinaryTreeTraits {
     using value_type = T;
-    using Node = BinaryTreeNode<T>;
+    using Node = NodeType;
     using ForwardIterator = BinaryTreeIterator<const Node>;
-    using BackwardIterator = BinaryTreeIterator<const Node, true>;
+    using BackwardIterator = BinaryTreeIterator<const Node, TreeOrder::InOrder, true>;
 };
+
+template <typename T> using AVLTraits = BinaryTreeTraits<T, AVLNode<T>>;
 
 
 

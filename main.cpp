@@ -2,8 +2,6 @@
 #include "Demos.h"
 #include "containers/vector.h"
 
-using namespace std;
-
 // Compilar asi: make
 // Ejecutar asi: ./main
 int main() {
@@ -15,5 +13,6 @@ int main() {
     DemoCircularDoubleLinkedList();
     DemoHeap();
     DemoBinaryTree();
+    DemoAVL();
     return 0;
 }

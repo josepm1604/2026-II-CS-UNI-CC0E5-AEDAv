@@ -9,11 +9,6 @@
 
 template <typename Traits, bool Double = false, bool Circular = false>
 class LinkedList : public FullTraversalOps {
-    friend class CallOp;
-    friend class RCallOp;
-    friend class FirstThatOp;
-    friend class RFirstThatOp;
-    friend class ApplyFunctionOp;
 public:
     using traits_type       = Traits;
     using value_type        = typename Traits::value_type;
@@ -26,7 +21,6 @@ protected:
     NodePtr m_pTail = nullptr; // puntero al último nodo de la lista enlazada
 
     Compare m_comp; // comparador para ordenar los nodos de la lista
-    mutable std::mutex m_mutex; // mutex para sincronización
 
     void internalInsert(const value_type& value, Ref ref, NodePtr& rParent);
     void corregirPunteros() {

@@ -2,6 +2,7 @@
 #define CONTAINERS_ALIASES_H
 
 #include "binarytree.h"
+#include "avl.h"
 #include "Heap.h"
 #include "vector.h"
 #include "traits.h"
@@ -36,6 +37,9 @@ using CircularDoubleLinkedDescList = CircularDoubleLinkedList<DoubleLinkedListDe
 
 template <typename T>
 using BinarySearchTree = BinaryTree<BinaryTreeTraits<T>>;
+
+template <typename T>
+using AVLSearchTree = AVLTree<AVLTraits<T>>;
 
 template <typename T>
 using MinHeap = Heap<MinHeapTraits<T>>;

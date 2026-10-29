@@ -44,6 +44,18 @@ decltype(auto) legacy_call(It first, It last, Func&& func, Args&&... args) {
     }
 }
 
-} 
+inline constexpr auto for_each_fn = [](auto first, auto last, auto&&... args) {
+    traversal_detail::for_each(first, last, std::forward<decltype(args)>(args)...);
+};
+
+inline constexpr auto first_that_fn = [](auto first, auto last, auto&&... args) -> decltype(auto) {
+    return traversal_detail::first_that(first, last, std::forward<decltype(args)>(args)...);
+};
+
+inline constexpr auto legacy_call_fn = [](auto first, auto last, auto&&... args) -> decltype(auto) {
+    return traversal_detail::legacy_call(first, last, std::forward<decltype(args)>(args)...);
+};
+
+} // namespace traversal_detail
 
 #endif // TRAVERSAL_ALGORITHMS_H

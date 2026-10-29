@@ -1,7 +1,6 @@
 #ifndef __HEAP_H__
 #define __HEAP_H__
 
-#include "container_stream.h"
 #include "traversalops.h"
 #include "../types.h"
 #include <cstddef>
@@ -11,10 +10,6 @@
 #include <utility>
 
 template <typename Traits> class Heap : public SearchTraversalOps {
-    friend class CallOp;
-    friend class RCallOp;
-    friend class FirstThatOp;
-    friend class RFirstThatOp;
 
 public:
     using traits_type = Traits;
@@ -28,7 +23,6 @@ public:
 
 private:
     Storage m_data;
-    mutable std::mutex m_mutex;
 
     void HeapifyUp(size_t index) {
         Compare compare;
@@ -55,6 +49,10 @@ private:
         }
     }
 
+    void ensure_not_empty() const {
+        if (m_data.empty()) throw std::out_of_range("Heap vacio");
+    }
+
 public:
     Heap() = default;
 
@@ -77,7 +75,7 @@ public:
 
     Node pop() {
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_data.empty()) throw std::out_of_range("Heap vacio");
+        ensure_not_empty();
         Node root = m_data[0];
         std::swap(m_data[0], m_data[m_data.size() - 1]);
         m_data.pop_back();
@@ -87,19 +85,12 @@ public:
 
     Node top() const {
         std::lock_guard<std::mutex> lock(m_mutex);
-        if (m_data.empty()) throw std::out_of_range("Heap vacio");
+        ensure_not_empty();
         return m_data[0];
     }
 
-    bool empty() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_data.empty();
-    }
-
-    size_t size() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_data.size();
-    }
+    bool empty() const { return m_data.empty(); }
+    size_t size() const { return m_data.size(); }
 
     void clear() {
         std::lock_guard<std::mutex> lock(m_mutex);
