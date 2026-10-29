@@ -2,6 +2,8 @@
 #define __GENERAL_ITERATOR_H__
 
 #include <iostream>
+#include <cstddef>
+#include <iterator>
 #include <stdexcept>
 #include <algorithm> // para std::swap
 
@@ -20,7 +22,7 @@ protected:
 public:
     GeneralIterator(pointer ptr) : m_ptr(ptr), m_pStart(ptr) {}
     value_type& operator*() const { return *m_ptr; }
-    // value_type* operator->()      { return m_ptr; }
+    pointer     operator->() const { return m_ptr; }
     friend bool operator== (const Derived& a, const Derived& b) { return a.m_ptr == b.m_ptr; };
     friend bool operator!= (const Derived& a, const Derived& b) { return a.m_ptr != b.m_ptr; };
 };

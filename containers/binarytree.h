@@ -97,9 +97,15 @@ protected:
 
 private:
     NodePtr m_root = nullptr; // root of the binary tree
+    size_t  m_size = 0;
     void internal_insert(NodePtr& node, const value_type& value, Ref ref, NodePtr parent = nullptr);
+    NodePtr clone(NodePtr source, NodePtr parent = nullptr) const;
 public:
     BaseBinaryTree() = default;
+    BaseBinaryTree(initializer_list<pair<value_type, Ref>> values) {
+        for (const auto &v : values)
+            insert(v.first, v.second);
+    }
     BaseBinaryTree(const BaseBinaryTree& another) { *this = another; }
     BaseBinaryTree(BaseBinaryTree&& another) noexcept { *this = std::move(another); }
     virtual ~BaseBinaryTree() { clear(); }
@@ -119,7 +125,12 @@ public:
 
     void push_back(const value_type& value, Ref ref) override { insert(value, ref); }
 
-    void clear_recursive(NodePtr node);
+    size_t size() const {
+        std::lock_guard lock(this->m_mutex);
+        return m_size;
+    }
+
+    void clear_recursive(NodePtr node) const;
 
     ForwardIterator begin() const override;
     ForwardIterator end() const override { return ForwardIterator(nullptr); }
@@ -136,6 +147,7 @@ void BaseBinaryTree<Traits, Mixins...>::internal_insert(NodePtr& node, const val
     if (!node) {
         node = new Node(value, ref);
         node->m_parent = parent;
+        ++m_size;
         return;
     }
     auto branch = Compare()(node->getValue(), value);
@@ -147,10 +159,11 @@ void BaseBinaryTree<Traits, Mixins...>::clear() {
     std::lock_guard lock(this->m_mutex);
     clear_recursive(m_root);
     m_root = nullptr;
+    m_size = 0;
 }
 
 template <typename Traits, template <typename> typename... Mixins>
-void BaseBinaryTree<Traits, Mixins...>::clear_recursive(NodePtr node) {
+void BaseBinaryTree<Traits, Mixins...>::clear_recursive(NodePtr node) const {
     if (!node) return;
     clear_recursive(node->m_pChild[0]);
     clear_recursive(node->m_pChild[1]);
@@ -172,14 +185,37 @@ auto BaseBinaryTree<Traits, Mixins...>::rbegin() const -> BackwardIterator {
 }
 
 template <typename Traits, template <typename> typename... Mixins>
+auto BaseBinaryTree<Traits, Mixins...>::clone(NodePtr source, NodePtr parent) const -> NodePtr {
+    if (!source) return nullptr;
+    NodePtr copy = new Node(source->getValue(), source->getRef());
+    copy->m_parent = parent;
+    try {
+        copy->m_pChild[0] = clone(source->m_pChild[0], copy);
+        copy->m_pChild[1] = clone(source->m_pChild[1], copy);
+    } catch (...) {
+        clear_recursive(copy);
+        throw;
+    }
+    return copy;
+}
+
+template <typename Traits, template <typename> typename... Mixins>
 auto BaseBinaryTree<Traits, Mixins...>::operator=(const BaseBinaryTree& another) -> BaseBinaryTree& {
-    this->copy_from(another);
+    if (this == &another) return *this;
+    std::scoped_lock lock(this->m_mutex, another.m_mutex);
+    NodePtr copy = clone(another.m_root);
+    clear();
+    m_root = copy;
+    m_size = another.m_size;
     return *this;
 }
 
 template <typename Traits, template <typename> typename... Mixins>
 auto BaseBinaryTree<Traits, Mixins...>::operator=(BaseBinaryTree&& another) noexcept -> BaseBinaryTree& {
-    this->move_from(another, [&]{ m_root = std::exchange(another.m_root, nullptr); });
+    this->move_from(another, [&]{
+        m_root = std::exchange(another.m_root, nullptr);
+        m_size = std::exchange(another.m_size, 0);
+    });
     return *this;
 }
 

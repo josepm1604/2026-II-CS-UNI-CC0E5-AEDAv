@@ -1,5 +1,7 @@
 #ifndef __GENERAL_CONTAINER_H__
 #define __GENERAL_CONTAINER_H__
+#include <concepts>
+#include <functional>
 #include "ContainerCore.h"
 
 template <typename T, typename _Compare>

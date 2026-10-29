@@ -3,6 +3,9 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <sstream>
+#include <random>
+#include <algorithm>
 #include "foreach.h"
 #include "containers/vector.h"
 #include "containers/linkedlist.h"
@@ -152,28 +155,16 @@ void DemoCustomContainer() {
     TestCustomVector();
 }
 
-// Insertamos muchos elementos (generados en un loop, no a mano)
-// concurrentemente y comparamos cuantos deberian haber entrado contra
-// cuantos entraron realmente. Si push_back no estuviera sincronizado
-// (sin el mutex/lock_guard actual) esto perderia inserciones o crashearia;
-// con el mutex protegiendo push_back/resize, deberia dar siempre 0 perdidas.
-void DemoRaceCondition() {
-    const size_t N = 200000;
+template <typename Container>
+void TestRaceCondition(const string &name, const vector<pair<typename Container::value_type, Ref>> &values) {
+    Container container;
 
-    vector<pair<TX, Ref>> values(N);
-    for (size_t i = 0; i < N; ++i)
-        values[i] = {static_cast<TX>(i), static_cast<Ref>(i)};
-
-    Vector<VectorAscTraits<TX>> vec;
-
-    // Insercion concurrente: NThreads workers insertando en paralelo sobre
-    // el mismo Vector, cada uno con un subconjunto entrelazado (stride)
     size_t n = values.size();
     vector<thread> workers;
     for (size_t t = 0; t < NThreads; ++t) {
-        workers.emplace_back([&vec, &values, n, t](){
+        workers.emplace_back([&container, &values, n, t](){
             for (size_t i = t; i < n; i += NThreads)
-                vec.push_back(values[i].first, values[i].second);
+                container.push_back(values[i].first, values[i].second);
         });
     }
     for (auto &worker : workers)
@@ -182,19 +173,56 @@ void DemoRaceCondition() {
     TXX expectedSum = 0;
     for (auto &v : values) expectedSum += v.first;
 
+    size_t actualCount = 0;
     TXX actualSum = 0;
-    for (size_t i = 0; i < vec.size(); ++i) actualSum += vec[i].getValue();
+    for (auto &&node : container) {
+        ++actualCount;
+        actualSum += node.getValue();
+    }
 
-    cout << "DemoRaceCondition: se esperaban " << N << " elementos, "
-         << "el Vector quedo con " << vec.size() << endl;
+    cout << "DemoRaceCondition (" << name << "): se esperaban " << n
+         << " elementos, el contenedor quedo con " << actualCount << endl;
     cout << "  suma esperada = " << expectedSum
          << ", suma obtenida = " << actualSum << endl;
 
-    if (vec.size() != N || actualSum != expectedSum)
-        cout << "  *** Race condition detectada: se perdieron inserciones (push_back / resize sin sincronizar) ***" << endl;
+    if (actualCount != n || actualSum != expectedSum)
+        PrintColored(cout, "  *** Race condition detectada: se perdieron inserciones ***", Color::Red);
     else
-        cout << "  No se perdio ningun elemento: el mutex de push_back/resize "
-             << "sincroniza correctamente las inserciones concurrentes" << endl;
+        PrintColored(cout, "  No se perdio ningun elemento: el mutex sincroniza las inserciones concurrentes", Color::Green);
+}
+
+void DemoRaceCondition() {
+    cout << "\n";
+    PrintColored(cout, "Pruebas de concurrencia (" + to_string(NThreads) + " hilos, push_back)", Color::Yellow);
+    const size_t N = 200000;
+
+    vector<pair<TX, Ref>> values(N);
+    for (size_t i = 0; i < N; ++i)
+        values[i] = {static_cast<TX>(i), static_cast<Ref>(i)};
+    shuffle(values.begin(), values.end(), mt19937(42));
+
+    TestRaceCondition<Vector<VectorAscTraits<TX>>>("Vector", values);
+    TestRaceCondition<LinkedList<LinkedListAscTraits<TX>>>("LinkedList", values);
+    TestRaceCondition<DoubleLinkedList<DoubleLinkedListAscTraits<TX>>>("DoubleLinkedList", values);
+    TestRaceCondition<CircularLinkedList<LinkedListAscTraits<TX>>>("CircularLinkedList", values);
+    TestRaceCondition<CircularDoubleLinkedList<DoubleLinkedListAscTraits<TX>>>("CircularDoubleLinkedList", values);
+    TestRaceCondition<MinHeap>("MinHeap", values);
+    TestRaceCondition<BinaryTree<BinaryTreeAscTraits<TX>>>("BinaryTree", values);
+}
+
+template <typename Container>
+void TestInvalidRead(Container &container) {
+    ostringstream before;
+    before << container;
+    istringstream invalid("[(7,70),roto]");
+    invalid >> container;
+    ostringstream after;
+    after << container;
+
+    bool ok = invalid.fail() && before.str() == after.str();
+    PrintColored(cout, ok ? "Lectura invalida rechazada sin modificar el contenedor"
+                          : "*** La lectura invalida fue aceptada o modifico el contenedor ***",
+                 ok ? Color::Green : Color::Red);
 }
 
 template <typename Container>
@@ -232,6 +260,7 @@ void TestLinkedList(Container &list, const string &filename) {
     in.close();
     cout << "Lista leida desde archivo: " << new_list << endl;
     TestForwardTraversal(new_list);
+    TestInvalidRead(new_list);
 
     list = new_list;
 }
@@ -298,6 +327,9 @@ void ExtractHeap(Heap &heap) {
 template <typename Heap>
 void TestHeap(Heap& heap) {
     InitHeap(heap);
+    cout << "Top: " << heap.top() << endl;
+    Heap copy(heap);
+    cout << "Copia del heap: " << copy << endl;
     ExtractHeap(heap);
     InitHeap(heap);
     heap.ApplyFunction(AddOne);
@@ -306,6 +338,12 @@ void TestHeap(Heap& heap) {
     heap.ApplyFunction(ModX<TX>, TX(m));
     cout << "Tras aplicar mod " << m << ": " << heap << endl;
     ExtractHeap(heap);
+    try {
+        heap.pop();
+    } catch (const out_of_range &e) {
+        cout << "pop() sobre heap vacio lanza out_of_range: " << e.what() << endl;
+    }
+    TestInvalidRead(heap);
     cout << endl;
 }
 
@@ -329,6 +367,10 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
     TestContainer(tree, {{50, 5}, {20, 2}, {80, 8}, {10, 1}, {30, 3}, {70, 7}, {90, 9}}, filename);
     // Recorrido in-order
     TestTraversal(tree);
+    cout << "Cantidad de nodos: " << tree.size() << endl;
+
+    TreeContainer copy(tree);
+    cout << "Copia del arbol: " << copy << " (" << copy.size() << " nodos)" << endl;
 
     tree.ApplyFunction(AddOne);
     cout << "Arbol tras usar AddOne: " << tree << endl;
@@ -347,6 +389,7 @@ void TestBinaryTree(TreeContainer &tree, const string &filename) {
 
     tree = new_tree;
     cout << "Arbol tras operator=: " << tree << endl;
+    TestInvalidRead(tree);
 }
 
 void DemoBinaryTree() {

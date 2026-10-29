@@ -1,7 +1,9 @@
 #ifndef __MIXINS__
 #define __MIXINS__
+#include <vector>
 #include "../foreach.h"
 #include "ContainerCore.h"
+#include "GeneralNode.h"
 
 // template <typename Traits>
 // using Parent = ContainerCore<Traits>;
@@ -54,31 +56,51 @@ template <typename Traits>
 class Printable : virtual public ContainerCore<Traits> {
     friend std::ostream& operator<<(std::ostream& os, const Printable& container) {
         std::lock_guard lock(container.m_mutex);
-        std::string sep = "";
-        os << "[";
-        for (const auto& e : container) { os << sep << e; sep = ","; };
-        return os << "]";
+        bool first = true;
+        os << StreamDelimiters::container_open;
+        for (const auto& e : container) {
+            if (!first) os << StreamDelimiters::separator;
+            os << e;
+            first = false;
+        }
+        return os << StreamDelimiters::container_close;
     }
 };
 
 template <typename Traits>
 class Readable : virtual public ContainerCore<Traits> {
-    friend std::istream& operator>>(std::istream& is, Readable& container) {
-        std::lock_guard lock(container.m_mutex);
-        typename Traits::Node::Delim d;
-        typename Traits::Node node;
-        container.clear();
+    using Delim = StreamDelimiters::Delim;
+    using Entry = GeneralNode<typename Traits::value_type>;
 
-        is >> d;
-        if (is >> d && d != ']'){
-            is.unget();
-            while(is >> node >> d){
-                container.push_back(node.getValue(), node.getRef());
-                if (d == ']') break;
-            }    
+    static bool parse(std::istream& is, std::vector<Entry>& entries) {
+        Delim d{};
+        if (!(is >> d) || d != StreamDelimiters::container_open) {
+            is.setstate(std::ios::failbit);
+            return false;
         }
+        if (is >> std::ws && is.peek() == StreamDelimiters::container_close) {
+            is.get();
+            return true;
+        }
+        Entry entry;
+        while (is >> entry >> d) {
+            entries.push_back(entry);
+            if (d == StreamDelimiters::container_close) return true;
+            if (d != StreamDelimiters::separator) break;
+        }
+        is.setstate(std::ios::failbit);
+        return false;
+    }
 
-        return is; 
+    friend std::istream& operator>>(std::istream& is, Readable& container) {
+        std::vector<Entry> entries;
+        if (!parse(is, entries)) return is;
+
+        std::lock_guard lock(container.m_mutex);
+        container.clear();
+        for (const auto& entry : entries)
+            container.push_back(entry.getValue(), entry.getRef());
+        return is;
     }
 };
 

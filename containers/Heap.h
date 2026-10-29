@@ -37,6 +37,10 @@ protected:
     Vector<VectorAscTraits<value_type>> m_data;
 public:
     BaseHeap() = default;
+    BaseHeap(initializer_list<pair<value_type, Ref>> values) {
+        for (const auto &v : values)
+            push(v.first, v.second);
+    }
     BaseHeap(const BaseHeap& other) { *this = other; }
     BaseHeap(BaseHeap&& other) noexcept { *this = std::move(other); }
     virtual ~BaseHeap() { clear(); }
@@ -64,6 +68,7 @@ public:
 
     void push(const value_type &value, Ref ref);
     void HeapifyUp(size_t index);
+    Node top() const;
     Node pop();
     void HeapifyDown(size_t index);
 
@@ -95,10 +100,16 @@ void BaseHeap<Traits, Mixins...>::HeapifyUp(size_t index) {
 }
 
 template <typename Traits, template <typename> typename... Mixins>
+auto BaseHeap<Traits, Mixins...>::top() const -> Node {
+    std::lock_guard lock(m_mutex);
+    if (m_data.empty()) throw std::out_of_range("Heap vacio");
+    return m_data[0];
+}
+
+template <typename Traits, template <typename> typename... Mixins>
 auto BaseHeap<Traits, Mixins...>::pop() -> Node {
     std::lock_guard lock(m_mutex);
-    static Node nullNode;
-    if (m_data.empty()) return nullNode;
+    if (m_data.empty()) throw std::out_of_range("Heap vacio");
     Node root = m_data[0];
     std::swap(m_data[0], m_data[m_data.size() - 1]);
     m_data.pop_back();
@@ -109,12 +120,13 @@ auto BaseHeap<Traits, Mixins...>::pop() -> Node {
 
 template <typename Traits, template <typename> typename... Mixins>
 void BaseHeap<Traits, Mixins...>::HeapifyDown(size_t index) {
+    const size_t n = m_data.size();
     while (true) {
         size_t l = (index * 2) + 1;
         size_t r = l + 1;
         size_t best = index;
-        if (l < size() && Compare()(m_data[l].getValue(), m_data[best].getValue())) best = l;
-        if (r < size() && Compare()(m_data[r].getValue(), m_data[best].getValue())) best = r;
+        if (l < n && Compare()(m_data[l].getValue(), m_data[best].getValue())) best = l;
+        if (r < n && Compare()(m_data[r].getValue(), m_data[best].getValue())) best = r;
         if (best == index) break;
         std::swap(m_data[best], m_data[index]);
         index = best;

@@ -17,7 +17,7 @@ protected:
     using Parent::m_pTail;
     using Parent::m_pRoot;
 
-    void linkNode(NodePtr pNew, NodePtr pPrev, NodePtr pNext = nullptr) override {
+    void linkNode(NodePtr, NodePtr, NodePtr = nullptr) override {
         if (m_pTail) m_pTail->m_pNext = m_pRoot;
     }
 public:

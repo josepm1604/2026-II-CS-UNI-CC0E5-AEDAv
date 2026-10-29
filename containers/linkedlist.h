@@ -67,7 +67,7 @@ protected:
     Compare m_comp; // comparador para ordenar los nodos de la lista
     using Parent::m_mutex;
 
-    virtual void linkNode(NodePtr pNew, NodePtr pPrev, NodePtr pNext = nullptr) {}
+    virtual void linkNode(NodePtr, NodePtr, NodePtr = nullptr) {}
 private:
 
     NodePtr GetRoot() const { return m_pRoot; }

@@ -90,8 +90,10 @@ public:
     void push_back(const value_type& value, Ref ref) override;
     void pop_back();
 
-    Node& operator[](size_t index);
-    Node& at(size_t index);
+    Node&       operator[](size_t index);
+    const Node& operator[](size_t index) const;
+    Node&       at(size_t index)       { return (*this)[index]; }
+    const Node& at(size_t index) const { return (*this)[index]; }
 
     size_t size()     const { return m_size; }
     size_t capacity() const { return m_capacity; }
@@ -155,7 +157,7 @@ auto BaseVector<Traits, Mixins...>::operator[](size_t index) -> Node& {
 }
 
 template <typename Traits, template <typename> typename... Mixins>
-auto BaseVector<Traits, Mixins...>::at(size_t index) -> Node& {
+auto BaseVector<Traits, Mixins...>::operator[](size_t index) const -> const Node& {
     if (index >= m_size) throw std::out_of_range("Indice fuera de rango");
     return m_data[index];
 }
