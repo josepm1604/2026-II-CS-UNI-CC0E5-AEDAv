@@ -10,7 +10,6 @@
 #include <mutex>
 #include <ostream>
 #include <string>
-#include <type_traits>
 #include <utility>
 
 template <typename T, typename Derived = void>

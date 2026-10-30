@@ -1,11 +1,8 @@
 #ifndef __GENERAL_ITERATOR_H__
 #define __GENERAL_ITERATOR_H__
 
-#include <iostream>
 #include <cstddef>
 #include <iterator>
-#include <stdexcept>
-#include <algorithm> // para std::swap
 
 // CRTP
 template <typename Derived, typename T>

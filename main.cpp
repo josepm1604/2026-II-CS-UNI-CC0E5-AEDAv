@@ -1,6 +1,4 @@
-#include <iostream>
 #include "Demos.h"
-#include "containers/vector.h"
 
 // Compilar asi: make
 // Ejecutar asi: ./main

@@ -7,8 +7,6 @@
 #include <type_traits>
 #include <utility>
 #include "GeneralIterator.h"
-#include "GeneralNode.h"
-#include "container_stream.h"
 #include "traversalops.h"
 #include "traits.h"
 #include "../types.h" // Ref

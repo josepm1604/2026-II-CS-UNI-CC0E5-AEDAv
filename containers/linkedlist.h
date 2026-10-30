@@ -5,7 +5,6 @@
 #include <utility>
 #include "listnodes.h"
 #include "traversalops.h"
-#include "container_stream.h"
 
 template <typename Traits, bool Double = false, bool Circular = false>
 class LinkedList : public FullTraversalOps {
