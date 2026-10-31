@@ -15,13 +15,43 @@
 #include "containers/aliases.h"
 #include "Demos.h"
 
-// ---------------------------------------------------------------------------
-// Utilidades generales
-// ---------------------------------------------------------------------------
-
-// Pares (valor, ref) que se insertan en un contenedor
 template <typename Container>
 using Values = std::vector<std::pair<typename Container::value_type, Ref>>;
+
+template <typename List> constexpr bool IsCircular = false;
+template <typename Traits, bool Double>
+constexpr bool IsCircular<LinkedList<Traits, Double, true>> = true;
+
+template <typename C>
+concept Writable = requires(const C& c, std::ostream& os) { c.write(os); };
+
+template <typename C>
+concept Insertable = requires(C& c, const typename C::value_type& v, Ref r) { c.insert(v, r); };
+
+template <typename C>
+concept HeapLike = requires(C& c) {
+    c.top();
+    c.pop();
+};
+
+template <typename C>
+concept TreeLike = requires(C& t, const typename C::value_type& v, std::ostream& os) {
+    t.InOrder();
+    t.PreOrder();
+    t.PostOrder();
+    t.height();
+    t.remove(v);
+    t.print_sideways(os);
+};
+
+template <typename C>
+concept Mutable = requires(C& c) { c.ApplyFunction([](auto&) {}); };
+
+template <typename C>
+concept Circular = IsCircular<C>;
+
+template <typename C>
+concept Copyable = std::is_copy_constructible_v<C> && std::is_copy_assignable_v<C>;
 
 void AddOne(GeneralNode<TX>& node) {
     node.value() += 1;
@@ -90,11 +120,6 @@ template <typename Container> void InsertAll(Container& container, const Values<
         container.insert(value, ref);
 }
 
-// ---------------------------------------------------------------------------
-// Rangos e impresion de recorridos
-// ---------------------------------------------------------------------------
-
-// Par de iteradores usable en un range-for
 template <typename Iterator> struct Range {
     Iterator first, last;
     Iterator begin() const { return first; }
@@ -105,7 +130,6 @@ template <typename Container> auto ReverseRange(const Container& container) {
     return Range{container.rbegin(), container.rend()};
 }
 
-// Imprime "label: [ ... ]" dejando que body escriba el contenido
 template <typename Body> void PrintBracketed(const std::string& label, Body body) {
     std::cout << label << ": [";
     body();
@@ -148,10 +172,6 @@ template <typename Iterator> void PrintCircularTraversal(Iterator begin, Iterato
     std::cout << " -> (vuelve a " << *begin << ")\n";
 }
 
-// ---------------------------------------------------------------------------
-// Pruebas genericas para cualquier contenedor
-// ---------------------------------------------------------------------------
-
 template <typename Container>
 void TestContainer(Container& container, const Values<Container>& values,
                    const std::string& filename) {
@@ -159,7 +179,7 @@ void TestContainer(Container& container, const Values<Container>& values,
         PrintColor("TestContainer (" + filename + ")");
         PushAll(container, values);
 
-        if constexpr (requires { container.write(std::cout); }) {
+        if constexpr (Writable<Container>) {
             std::cout << "Container using write(): ";
             container.write(std::cout);
             std::cout << '\n';
@@ -204,7 +224,7 @@ void TestGenericContainer(Container& container, const std::string& filename = "c
         std::cout << "Luego de push_back: ";
         PrintColor(container);
 
-        if constexpr (requires(Container& c) { c.insert(5, 105); }) {
+        if constexpr (Insertable<Container>) {
             InsertAll(container, {{5, 105}, {2, 102}, {9, 109}});
             std::cout << "Luego de insert: ";
             PrintColor(container);
@@ -261,7 +281,7 @@ void TestCopyAndClear(Container& container, const std::string& name) {
         throw std::runtime_error(name + ": clear no dejo el contenedor vacio");
 
     container.push_back(3, 30);
-    if constexpr (requires { container.insert(1, 10); })
+    if constexpr (Insertable<Container>)
         InsertAll(container, {{1, 10}, {5, 50}});
     Container copy(container);
     container = container;
@@ -321,10 +341,7 @@ void TestStructure(Container& container, const std::string& name) {
     TestContainer(container, values, name + ".txt");
     TestTraversal(container, name);
 
-    if constexpr (requires {
-                      container.top();
-                      container.pop();
-                  }) {
+    if constexpr (HeapLike<Container>) {
         std::cout << "Top: " << container.top() << '\n';
         std::cout << "Orden de extraccion: ";
         while (!container.empty())
@@ -336,7 +353,7 @@ void TestStructure(Container& container, const std::string& name) {
     TestGenericContainer(container, name + "_persist.txt");
     TestInvalidRead(container, name);
 
-    if constexpr (std::is_copy_constructible_v<Container> && std::is_copy_assignable_v<Container>) {
+    if constexpr (Copyable<Container>) {
         Container copyAndClear;
         TestCopyAndClear(copyAndClear, name);
     }
@@ -349,7 +366,6 @@ template <typename Container> void TestStructure(const std::string& name) {
     TestStructure(container, name);
 }
 
-// Inserta N elementos desde NThreads hilos y verifica que no se pierda ninguno
 template <typename Container> void DemoRaceCondition(const std::string& name) {
     PrintColor("DemoRaceCondition (" + name + ")");
     const size_t N = 200000;
@@ -361,112 +377,38 @@ template <typename Container> void DemoRaceCondition(const std::string& name) {
     TestRaceCondition<Container>(name, values);
 }
 
-// ---------------------------------------------------------------------------
-// Vector
-// ---------------------------------------------------------------------------
 
-void DemoRaceCondition() { DemoRaceCondition<VectorAsc<TX>>("Vector"); }
-
-void DemoVector() {
-    PrintColor("DemoVector");
-
-    VectorAsc<TX> vec;
-    TestStructure(vec, "Vector");
-
-    VectorAsc<std::string> strVec;
-    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
-    TestTraversal(strVec, "Vector<string>");
-
-    const auto& constVec = vec;
-    CheckReverse("Vector const", constVec, ReverseRange(constVec));
-    if (CollectRefs(constVec).size() != vec.size())
-        throw std::runtime_error("Vector const: recorridos inconsistentes");
-
-    VectorAsc<TX> emptyVector;
-    if (emptyVector.rbegin() != emptyVector.rend())
-        throw std::runtime_error("Vector vacio: recorrido inverso incorrecto");
-    const auto& constEmpty = emptyVector;
-    if (constEmpty.begin() != constEmpty.end() || constEmpty.rbegin() != constEmpty.rend())
-        throw std::runtime_error("Vector const vacio: recorrido incorrecto");
-    std::cout << "Vector: recorrido const y vacio OK\n";
-}
-
-// ---------------------------------------------------------------------------
-// Listas enlazadas: una sola demo para las 4 variantes
-// ---------------------------------------------------------------------------
-
-template <typename List> constexpr bool IsCircular = false;
-template <typename Traits, bool Double>
-constexpr bool IsCircular<LinkedList<Traits, Double, true>> = true;
-
-// Muestra el ciclo de una lista circular en los sentidos que soporte
-template <typename List> void PrintCycles(const List& list, const std::string& label) {
-    if constexpr (IsCircular<List>) {
-        if constexpr (ReverseTraversable<List>) {
-            std::cout << "Ciclo" << label << " hacia adelante: ";
-            PrintCircularTraversal(list.begin(), list.end());
-            std::cout << "Ciclo" << label << " hacia atras: ";
-            PrintCircularTraversal(list.rbegin(), list.rend());
-        } else {
-            std::cout << "Ciclo" << label << ": ";
-            PrintCircularTraversal(list.begin(), list.end());
-        }
+template <Circular List> void PrintCycles(const List& list, const std::string& label) {
+    if constexpr (ReverseTraversable<List>) {
+        std::cout << "Ciclo" << label << " hacia adelante: ";
+        PrintCircularTraversal(list.begin(), list.end());
+        std::cout << "Ciclo" << label << " hacia atras: ";
+        PrintCircularTraversal(list.rbegin(), list.rend());
+    } else {
+        std::cout << "Ciclo" << label << ": ";
+        PrintCircularTraversal(list.begin(), list.end());
     }
 }
 
-template <typename AscList, typename DescList> void DemoList(const std::string& name) {
-    PrintColor("Demo" + name);
-    AscList lista;
-    TestStructure(lista, name);
-    PrintCycles(lista, "");
-
-    lista.ApplyFunction(AddOne);
+template <Mutable Container> void TestApplyFunction(Container& container) {
+    container.ApplyFunction(AddOne);
     std::cout << "Tras AddOne: ";
-    PrintColor(lista);
-    lista.ApplyFunction(AddX<TX>, TX(10));
+    PrintColor(container);
+    container.ApplyFunction(AddX<TX>, TX(10));
     std::cout << "Tras AddX(10): ";
-    PrintColor(lista);
+    PrintColor(container);
+}
 
-    DescList descendente;
+template <Insertable Desc> void TestDescending(const std::string& label) {
+    Desc descendente;
     InsertAll(descendente, {{5, 105}, {3, 103}, {7, 107}});
-    std::cout << "Lista descendente: ";
+    std::cout << label << ": ";
     PrintColor(descendente);
-    PrintCycles(descendente, " descendente");
-
-    DemoRaceCondition<AscList>(name);
+    if constexpr (Circular<Desc>)
+        PrintCycles(descendente, " descendente");
 }
 
-void DemoLinkedList() {
-    DemoList<LinkedAscList<TX>, LinkedDescList<TX>>("LinkedList");
-}
-
-void DemoCircularLinkedList() {
-    DemoList<CircularLinkedAscList<TX>, CircularLinkedDescList<TX>>("CircularLinkedList");
-}
-
-void DemoDoubleLinkedList() {
-    DemoList<DoubleLinkedAscList<TX>, DoubleLinkedDescList<TX>>("DoubleLinkedList");
-}
-
-void DemoCircularDoubleLinkedList() {
-    DemoList<CircularDoubleLinkedAscList<TX>, CircularDoubleLinkedDescList<TX>>(
-        "CircularDoubleLinkedList");
-}
-
-// ---------------------------------------------------------------------------
-// Heap
-// ---------------------------------------------------------------------------
-
-void DemoHeap() {
-    TestStructure<MinHeap<int>>("MinHeap");
-    TestStructure<MaxHeap<int>>("MaxHeap");
-}
-
-// ---------------------------------------------------------------------------
-// Arboles
-// ---------------------------------------------------------------------------
-
-template <typename Tree> void CheckTree(const Tree& tree, const std::string& name) {
+template <TreeLike Tree> void CheckTree(const Tree& tree, const std::string& name) {
     std::vector<TX> values;
     for (auto&& node : tree.InOrder())
         values.push_back(node.getValue());
@@ -474,7 +416,7 @@ template <typename Tree> void CheckTree(const Tree& tree, const std::string& nam
         throw std::runtime_error(name + ": el arbol perdio su orden");
 }
 
-template <typename Tree> void TestTreeTraversals(const Tree& tree, const std::string& name) {
+template <TreeLike Tree> void TestTreeTraversals(const Tree& tree, const std::string& name) {
     PrintColor("TestTreeTraversals (" + name + ")");
     using Node = typename Tree::Node;
     PrintTraversal("InOrder         ", tree.InOrder());
@@ -495,7 +437,7 @@ template <typename Tree> void TestTreeTraversals(const Tree& tree, const std::st
     std::cout << name << ": los 6 recorridos OK\n";
 }
 
-template <typename Tree> void TestTreeRemove(Tree& tree, const std::string& name) {
+template <TreeLike Tree> void TestTreeRemove(Tree& tree, const std::string& name) {
     PrintColor("TestTreeRemove (" + name + ")");
     for (TX value : {20, 60, 50, 99}) {
         bool removed = tree.remove(value);
@@ -514,7 +456,7 @@ template <typename Tree> void TestTreeRemove(Tree& tree, const std::string& name
     CheckTree(leido, name);
 }
 
-template <typename Tree> void TestTreeHeight(const std::string& name) {
+template <TreeLike Tree> void TestTreeHeight(const std::string& name) {
     PrintColor("TestTreeHeight (" + name + ")");
     Tree tree;
     for (TX value = 1; value <= 15; ++value)
@@ -524,9 +466,7 @@ template <typename Tree> void TestTreeHeight(const std::string& name) {
     CheckTree(tree, name);
 }
 
-template <typename Tree> void TestBinaryTree(const std::string& name) {
-    TestStructure<Tree>(name);
-
+template <TreeLike Tree> void TestTree(const std::string& name) {
     Tree tree{{50, 500}, {30, 300}, {70, 700}, {20, 200}, {40, 400},
               {60, 600}, {80, 800}, {35, 350}, {65, 650}};
     PrintColor("Visualizacion (" + name + ")");
@@ -536,11 +476,78 @@ template <typename Tree> void TestBinaryTree(const std::string& name) {
     TestTreeHeight<Tree>(name);
 }
 
-void DemoBinaryTree() {
-    TestBinaryTree<BinarySearchTree<TX>>("BinaryTree");
+template <typename Desc = void, typename C> void Demo(C& container, const std::string& name) {
+    PrintColor("Demo" + name);
+    TestStructure(container, name);
+
+    if constexpr (Circular<C>)
+        PrintCycles(container, "");
+
+    if constexpr (Mutable<C> && Insertable<C>)
+        TestApplyFunction(container);
+
+    if constexpr (!std::is_void_v<Desc>)
+        TestDescending<Desc>("Lista descendente");
+
+    if constexpr (TreeLike<C>)
+        TestTree<C>(name);
+
+    if constexpr (Mutable<C> && Insertable<C>)
+        DemoRaceCondition<C>(name);
 }
 
+template <typename C, typename Desc = void> void Demo(const std::string& name) {
+    C container;
+    Demo<Desc>(container, name);
+}
+
+void DemoRaceCondition() { DemoRaceCondition<VectorAsc<TX>>("Vector"); }
+
+void DemoVector() {
+    VectorAsc<TX> vec;
+    Demo(vec, "Vector");
+
+    VectorAsc<std::string> strVec;
+    TestContainer(strVec, {{"Hello", 1}, {"World", 2}}, "vector_str.txt");
+    TestTraversal(strVec, "Vector<string>");
+
+    const auto& constVec = vec;
+    CheckReverse("Vector const", constVec, ReverseRange(constVec));
+    if (CollectRefs(constVec).size() != vec.size())
+        throw std::runtime_error("Vector const: recorridos inconsistentes");
+
+    VectorAsc<TX> emptyVector;
+    if (emptyVector.rbegin() != emptyVector.rend())
+        throw std::runtime_error("Vector vacio: recorrido inverso incorrecto");
+    const auto& constEmpty = emptyVector;
+    if (constEmpty.begin() != constEmpty.end() || constEmpty.rbegin() != constEmpty.rend())
+        throw std::runtime_error("Vector const vacio: recorrido incorrecto");
+    std::cout << "Vector: recorrido const y vacio OK\n";
+}
+
+void DemoLinkedList() { Demo<LinkedAscList<TX>, LinkedDescList<TX>>("LinkedList"); }
+
+void DemoCircularLinkedList() {
+    Demo<CircularLinkedAscList<TX>, CircularLinkedDescList<TX>>("CircularLinkedList");
+}
+
+void DemoDoubleLinkedList() {
+    Demo<DoubleLinkedAscList<TX>, DoubleLinkedDescList<TX>>("DoubleLinkedList");
+}
+
+void DemoCircularDoubleLinkedList() {
+    Demo<CircularDoubleLinkedAscList<TX>, CircularDoubleLinkedDescList<TX>>(
+        "CircularDoubleLinkedList");
+}
+
+void DemoHeap() {
+    Demo<MinHeap<int>>("MinHeap");
+    Demo<MaxHeap<int>>("MaxHeap");
+}
+
+void DemoBinaryTree() { Demo<BinarySearchTree<TX>>("BinaryTree"); }
+
 void DemoAVL() {
-    TestBinaryTree<AVLSearchTree<TX>>("AVL");
+    Demo<AVLSearchTree<TX>>("AVL");
     DemoRaceCondition<AVLSearchTree<TX>>("AVL");
 }

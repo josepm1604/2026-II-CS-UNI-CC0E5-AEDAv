@@ -184,6 +184,18 @@ public:
         return true;
     }
 
+    value_type* find(const value_type& value) {
+        std::lock_guard lock(m_mutex);
+        NodePtr node = find_node(value);
+        return node ? &node->value() : nullptr;
+    }
+
+    const value_type* find(const value_type& value) const {
+        std::lock_guard lock(m_mutex);
+        NodePtr node = find_node(value);
+        return node ? &node->value() : nullptr;
+    }
+
     bool contains(const value_type& value) const {
         std::lock_guard lock(m_mutex);
         return find_node(value) != nullptr;
