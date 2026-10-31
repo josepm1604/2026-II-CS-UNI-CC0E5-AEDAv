@@ -86,11 +86,6 @@ private:
         return copy;
     }
 
-    std::size_t height(NodePtr node) const {
-        if (!node) return 0;
-        return 1 + std::max(height(node->m_pChild[0]), height(node->m_pChild[1]));
-    }
-
     void print_sideways(std::ostream& os, NodePtr node, std::size_t depth) const {
         if (!node) return;
         print_sideways(os, node->m_pChild[1], depth + 1);
@@ -109,6 +104,11 @@ protected:
     virtual void after_remove(NodePtr, bool) {}
     virtual NodePtr replacement(NodePtr node) const { return extreme(node->m_pChild[1], 0); }
     virtual void print_node(std::ostream& os, const Node& node) const { os << node; }
+
+    virtual std::size_t height(NodePtr node) const {
+        if (!node) return 0;
+        return 1 + std::max(height(node->m_pChild[0]), height(node->m_pChild[1]));
+    }
 
     NodePtr& link_of(NodePtr node) {
         NodePtr parent = node->m_pParent;

@@ -22,6 +22,7 @@ public:
     using typename Parent::value_type;
     using typename Parent::Node;
     using typename Parent::NodePtr;
+    using Parent::height;
 
     AVLTree() = default;
 
@@ -59,6 +60,13 @@ protected:
     NodePtr replacement(NodePtr node) const override {
         bool side = node->m_balance >= 0;
         return extreme(node->m_pChild[side], !side);
+    }
+
+    std::size_t height(NodePtr node) const override {
+        std::size_t h = 0;
+        for (; node; ++h)
+            node = node->m_pChild[node->m_balance > 0];
+        return h;
     }
 
     void print_node(std::ostream& os, const Node& node) const override {
